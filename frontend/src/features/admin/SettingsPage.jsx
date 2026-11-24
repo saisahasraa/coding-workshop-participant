@@ -16,6 +16,7 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { sendTestEmail } from '../../api/collab';
 import { auditApi, settingsApi } from '../../api/resources';
 import { useNotify } from '../../components/NotificationProvider';
 import PageHeader from '../../components/PageHeader';
@@ -145,6 +146,38 @@ function SettingRow({ setting, onChanged }) {
 
 SettingRow.propTypes = { setting: PropTypes.object.isRequired, onChanged: PropTypes.func.isRequired };
 
+/** Tries a real email to the admin and says exactly what happened, so delivery problems are not a guess. */
+function EmailTest() {
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await sendTestEmail());
+    } catch (err) {
+      setResult({ sent: false, error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card component="section" aria-labelledby="email-test-heading"><CardContent>
+      <Typography id="email-test-heading" variant="h3" gutterBottom>Email delivery</Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
+        Notifications always appear in the bell. They are also emailed when notifications.email_enabled is on, a sender address
+        is configured, and this environment is allowed to send email. Send yourself a test to find out.
+      </Typography>
+      <Button variant="outlined" onClick={run} disabled={busy}>{busy ? 'Sending…' : 'Send test email'}</Button>
+      {result && (
+        <Alert severity={result.sent ? 'success' : 'warning'} sx={{ mt: 1.5 }}>
+          {result.sent ? `Sent to ${result.to} from ${result.from}.` : `Not sent. ${result.error}`}
+          {result.sent && !result.enabled && ' Turn on notifications.email_enabled below to email notifications.'}
+        </Alert>
+      )}
+    </CardContent></Card>
+  );
+}
+
 /** Admin console for runtime settings: changes apply without a redeploy (within the settings cache window). */
 export default function SettingsPage() {
   const loader = useCallback((signal) => settingsApi.list(signal), []);
@@ -157,6 +190,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" subtitle="Tune the system without a redeploy. Changes take effect within about 30 seconds everywhere and are recorded in the audit log." />
       <Stack spacing={2}>
+        <EmailTest />
         {Object.entries(groups).map(([group, settings]) => (
           <Card key={group} component="section" aria-labelledby={`group-${group}`}><CardContent>
             <Typography id={`group-${group}`} variant="h3" gutterBottom>{GROUP_TITLES[group] || labelize(group)}</Typography>

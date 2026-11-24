@@ -22,7 +22,7 @@ def test_pm_creates_project_they_manage(call, org, make_project):
     assert project["status"] == "planning" and project["visibility"] == "inherit"
     assert project["planned_budget"] == 1500.5
     assert project["progress_pct"] == 0 and project["deliverables_total"] == 0
-    assert project["permissions"] == {"update": True, "delete": True,
+    assert project["permissions"] == {"update": True, "delete": True, "add_deliverables": True,
                                       "editable_fields": sorted(set(project["permissions"]["editable_fields"]))}
     assert "manager_id" not in project["permissions"]["editable_fields"]
 
@@ -49,7 +49,7 @@ def test_only_owner_pm_or_admin_can_change_or_delete(call, org, make_project):
     project = make_project()
     path = f"/projects/{project['id']}"
     other = call("GET", path, token=org["pm2"]["token"])[1]
-    assert other["permissions"] == {"update": False, "delete": False, "editable_fields": []}
+    assert other["permissions"] == {"update": False, "delete": False, "editable_fields": [], "add_deliverables": True}
     assert call("PUT", path, {"name": "Hijack"}, org["pm2"]["token"])[0] == 403
     assert call("DELETE", path, token=org["pm2"]["token"])[0] == 403
     assert call("PUT", path, {"name": "x"}, org["team_member"]["token"])[0] == 403

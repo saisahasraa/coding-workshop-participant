@@ -19,11 +19,12 @@ export const META = {
 
 const ALL = ['create', 'delete', 'read', 'update'];
 const RU = ['read', 'update'];
+const CRU = ['create', 'read', 'update'];
 export const PERMISSIONS = {
   admin: { users: ALL, departments: ALL, teams: ALL, projects: ALL, deliverables: ALL, leaves: ALL, expenses: ALL, settings: RU, 'audit-log': ['read'] },
   project_manager: { users: ['read'], departments: ['read'], teams: ['read'], projects: ALL, deliverables: ALL, leaves: ['read'], expenses: ALL },
-  team_lead: { users: RU, departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
-  team_member: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
+  team_lead: { users: RU, departments: ['read'], teams: ['read'], projects: ['read'], deliverables: CRU, leaves: ALL, expenses: ['read'] },
+  team_member: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: CRU, leaves: ALL, expenses: ['read'] },
   viewer: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: ['read'], leaves: ['read'], expenses: ['read'] },
 };
 
@@ -39,7 +40,8 @@ export const PROJECT = {
   budget_spent: 84000, budget_burn_pct: 70, schedule_elapsed_pct: 60, health: 'amber',
   health_reasons: [{ level: 'amber', code: 'overdue', message: '1 deliverable overdue, the longest by 3 days' }],
   deliverables_total: 2, deliverables_completed: 1, deliverables_blocked: 0, deliverables_overdue: 1,
-  permissions: { update: true, delete: true, editable_fields: null },
+  edit_access: 'inherit', comment_access: 'inherit',
+  permissions: { update: true, delete: true, editable_fields: null, add_deliverables: true },
 };
 
 export const DELIVERABLE = {
@@ -192,4 +194,18 @@ export const SEARCH = {
   projects: [{ id: 8, key: 'PAY', name: 'Payments platform', status: 'active', health: 'red' }],
   deliverables: [{ id: 21, key: 'PAY-2', name: 'Fraud rules engine', status: 'blocked', project_key: 'PAY' }],
   people: [{ id: 5, name: 'Payton Reed', role: 'team_member', job_title: 'Backend Engineer', team_name: 'Platform' }],
+};
+
+export const FILE = {
+  id: 41, deliverable_id: 11, comment_id: 5, uploader_id: 2, uploader_name: 'Alice Morgan', filename: 'wireframe.png', content_type: 'image/png',
+  size_bytes: 204800, created_at: '2026-01-04T09:00:00Z', is_image: true, permissions: { delete: true },
+};
+
+export const NOTIFICATIONS = {
+  unread: 2,
+  data: [
+    { id: 9, kind: 'mention', message: 'Alice Morgan mentioned you on WEB-3 “Design system”', link: '/deliverables/WEB-3', read_at: null, created_at: '2026-03-02T09:00:00Z', actor_name: 'Alice Morgan' },
+    { id: 8, kind: 'assigned', message: 'Alice Morgan assigned you WEB-4 “Launch campaign”', link: '/deliverables/WEB-4', read_at: null, created_at: '2026-03-01T09:00:00Z', actor_name: 'Alice Morgan' },
+    { id: 7, kind: 'status', message: 'Bob Stone moved project WEB “Website relaunch” to on hold', link: '/projects/WEB', read_at: '2026-02-20T09:00:00Z', created_at: '2026-02-19T09:00:00Z', actor_name: 'Bob Stone' },
+  ],
 };

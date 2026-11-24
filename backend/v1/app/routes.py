@@ -83,6 +83,7 @@ router.add("DELETE", "/attachments/{attachment_id}", attachments.delete_attachme
 # Notifications
 router.add("GET", "/notifications", notify.list_mine)
 router.add("POST", "/notifications/read", notify.mark_read)
+router.add("POST", "/notifications/test-email", notify.test_email)
 
 # Search
 router.add("GET", "/search", lambda request: ok(search.search(request.user, request.query)))

@@ -147,7 +147,7 @@ export default function ProjectDetailPage() {
   }
   if (!project) return <LinearProgress aria-label="Loading project" />;
 
-  const canAddDeliverables = can('deliverables', 'create') && project.permissions.update;
+  const canAddDeliverables = can('deliverables', 'create') && project.permissions.add_deliverables;
 
   return (
     <>

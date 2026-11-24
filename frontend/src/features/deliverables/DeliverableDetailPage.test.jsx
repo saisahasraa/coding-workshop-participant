@@ -12,7 +12,7 @@ import { apiUrl, server } from '../../test/server';
 const PEOPLE = [{ id: 1, name: 'Pat team member' }, { id: 2, name: 'Alice Morgan' }];
 const COMMENT = {
   id: 5, deliverable_id: 11, author_id: 2, author_name: 'Alice Morgan', body: 'Please add dark mode tokens.',
-  created_at: '2026-01-03T09:00:00Z', updated_at: '2026-01-03T09:00:00Z', edited: false,
+  created_at: '2026-01-03T09:00:00Z', updated_at: '2026-01-03T09:00:00Z', edited: false, mentions: [],
   permissions: { update: false, delete: false },
 };
 const OPEN_LINK = { id: 3, type: 'is_blocked_by', deliverable_id: 9, key: 'WEB-1', name: 'Information architecture', status: 'in_progress', priority: 'high' };
@@ -28,10 +28,11 @@ function routes() {
 }
 
 /** Handlers for the page's supporting data; `state` lets tests mutate comments and links. */
-function support(state = { comments: [COMMENT], links: [OPEN_LINK] }) {
+function support(state = { comments: [COMMENT], links: [OPEN_LINK] }, canComment = true) {
   return [
+    http.get(apiUrl('/deliverables/WEB-3/attachments'), () => HttpResponse.json({ data: [], total: 0, max_size_mb: 10, enabled: true })),
     http.get(apiUrl('/users'), () => HttpResponse.json(page(PEOPLE))),
-    http.get(apiUrl('/deliverables/WEB-3/comments'), () => HttpResponse.json({ data: state.comments, total: state.comments.length })),
+    http.get(apiUrl('/deliverables/WEB-3/comments'), () => HttpResponse.json({ data: state.comments, total: state.comments.length, can_comment: canComment })),
     http.get(apiUrl('/deliverables/WEB-3/links'), () => HttpResponse.json({ data: state.links })),
     http.post(apiUrl('/deliverables/WEB-3/comments'), async ({ request }) => {
       const { body } = await request.json();
@@ -69,7 +70,7 @@ describe('Deliverable detail (Jira-style)', () => {
     expect(screen.queryByRole('combobox', { name: 'Assignee' })).not.toBeInTheDocument();
     expect(screen.getByText('Alice Morgan', { selector: 'p, div' })).toBeInTheDocument(); // reporter
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Link work item' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link work item' })).toBeInTheDocument();   // whoever can edit can link
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Status' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Blocked' }));
@@ -111,7 +112,7 @@ describe('Deliverable detail (Jira-style)', () => {
   it('is read-only for viewers and reports missing items', async () => {
     const readOnly = { ...DELIVERABLE, permissions: { update: false, delete: false, editable_fields: [] } };
     server.use(
-      ...sessionHandlers('viewer'), ...support(),
+      ...sessionHandlers('viewer'), ...support(undefined, false),
       http.get(apiUrl('/deliverables/WEB-3'), () => HttpResponse.json(readOnly)),
       http.get(apiUrl('/deliverables/NOPE-9'), () => HttpResponse.json({ error: { code: 'not_found', message: 'x' } }, { status: 404 })),
     );

@@ -96,3 +96,9 @@ variable "app_admin_password" {
   default     = null
   sensitive   = true
 }
+
+variable "app_notify_from_email" {
+  description = "Sender address for notification emails (must be verified in SES). Empty disables email."
+  type        = string
+  default     = ""
+}

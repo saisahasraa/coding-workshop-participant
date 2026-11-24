@@ -12,6 +12,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
+import { listAttachments } from '../../api/collab';
 import { deliverablesApi } from '../../api/resources';
 import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -21,6 +22,7 @@ import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import { formatDate } from '../../utils/format';
+import ArtifactsPanel from './ArtifactsPanel';
 import CommentsSection from './CommentsSection';
 import DetailsPanel from './DetailsPanel';
 import InlineText from './InlineText';
@@ -39,8 +41,9 @@ export default function DeliverableDetailPage() {
   const loader = useCallback((signal) => deliverablesApi.get(ref, signal), [ref]);
   const { data: item, error, loading, reload, setData } = useApi(loader);
 
-  const canEditAny = Boolean(item?.permissions.update);
-  const people = useLookups(['people'], canEditAny).people || [];
+  const filesLoader = useCallback((signal) => listAttachments(ref, signal), [ref]);
+  const { data: attachments, reload: reloadFiles } = useApi(filesLoader);
+  const people = useLookups(['people'], user.role !== 'viewer').people || [];   // assignee pickers and @mentions
 
   if (error && !item) {
     return (
@@ -54,7 +57,6 @@ export default function DeliverableDetailPage() {
   const { permissions } = item;
   const allowed = permissions.editable_fields;
   const canEdit = (name) => permissions.update && (allowed === null || allowed.includes(name));
-  const managesProject = user.role === 'admin' || (user.role === 'project_manager' && item.project_manager_id === user.id);
 
   /** Save changed fields and refresh the page data in place. Rejects so inputs can show the error. */
   const save = async (changes) => {
@@ -147,14 +149,17 @@ export default function DeliverableDetailPage() {
             </section>
 
             <Divider />
-            <LinksSection key={`${item.key}-${item.status}`} deliverableKey={item.key} canEdit={managesProject} onChanged={reload} />
+            <LinksSection key={`${item.key}-${item.status}`} deliverableKey={item.key} canEdit={Boolean(permissions.update)} onChanged={reload} />
             <Divider />
-            <CommentsSection deliverableKey={item.key} canComment={user.role !== 'viewer'} />
+            <CommentsSection deliverableKey={item.key} people={people} attachments={attachments} onFilesChanged={reloadFiles} />
           </Stack>
         </Grid>
 
         <Grid size={{ xs: 12, md: 4 }}>
-          <DetailsPanel item={item} meta={meta} people={people} onSave={save} />
+          <Stack spacing={2}>
+            <DetailsPanel item={item} meta={meta} people={people} onSave={save} />
+            <ArtifactsPanel attachments={attachments} onChanged={reloadFiles} />
+          </Stack>
         </Grid>
       </Grid>
 

@@ -711,6 +711,8 @@ Known decisions left as they are: work blocked by a deliverable of a *cancelled*
 
 ✅ **Done when** a team member can add a deliverable to an open project, a manager can restrict a project to its members, a comment with an @mention and an image notifies the right people and shows the image, and the file appears under Artifacts.
 
+> **Status: built, awaiting validation.** Migration 8; `notify.py`, `storage.py`, `attachments.py`; attachments bucket and its env vars in Terraform; comment composer with mentions and uploads, Artifacts panel, notification bell, sectioned two-column forms, add-deliverable from the list; 331 backend, 157 frontend and 14 end-to-end tests. Deleting a file removes its record but not the stored object.
+
 ---
 
 ## 10. Design Decisions

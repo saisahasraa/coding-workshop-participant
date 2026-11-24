@@ -83,6 +83,20 @@ describe('Settings console', () => {
     expect(queries[0]).toMatchObject({ entity: 'app_settings' });
   });
 
+  it('tests email delivery and explains the result', async () => {
+    let answer = { sent: false, error: 'AccessDenied: not authorized to perform ses:SendEmail', to: 'ada@acme.example', from: 'tracker@acme.example', enabled: false };
+    server.use(...sessionHandlers('admin'), listing(), http.post(apiUrl('/notifications/test-email'), () => HttpResponse.json(answer)));
+    renderWithApp(<SettingsPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Send test email' }));
+    expect(await screen.findByText(/Not sent. AccessDenied: not authorized to perform ses:SendEmail/)).toBeInTheDocument();
+    answer = { ...answer, sent: true, error: null };
+    await userEvent.click(screen.getByRole('button', { name: 'Send test email' }));
+    expect(await screen.findByText(/Sent to ada@acme.example from tracker@acme.example. Turn on notifications.email_enabled/)).toBeInTheDocument();
+    server.use(http.post(apiUrl('/notifications/test-email'), () => fail('Boom')));
+    await userEvent.click(screen.getByRole('button', { name: 'Send test email' }));
+    expect(await screen.findByText('Not sent. Boom')).toBeInTheDocument();
+  });
+
   it('reports a failing settings load', async () => {
     server.use(...sessionHandlers('admin'), http.get(apiUrl('/settings'), () => fail('Boom')));
     renderWithApp(<SettingsPage />);

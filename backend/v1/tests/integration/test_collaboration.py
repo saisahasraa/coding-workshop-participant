@@ -58,6 +58,16 @@ def test_a_manager_restricts_a_project_to_its_members(call, org, make_project):
     assert call("PUT", f"/projects/{project['id']}", {"edit_access": "nobody"}, pm["token"])[0] == 400
 
 
+def test_projects_say_whether_the_caller_may_add_deliverables(call, org, make_project):
+    project = make_project(key="FLG")
+    flag = lambda who: call("GET", "/projects/FLG", token=org[who]["token"])[1]["permissions"]["add_deliverables"]  # noqa: E731
+    assert (flag("project_manager"), flag("team_lead"), flag("viewer")) == (True, True, False)
+    call("PUT", f"/projects/{project['id']}", {"edit_access": "members"}, org["project_manager"]["token"])
+    assert (flag("project_manager"), flag("team_lead"), flag("admin")) == (True, False, True)
+    call("PUT", f"/projects/{project['id']}", {"status": "cancelled"}, org["project_manager"]["token"])
+    assert flag("project_manager") is False                                    # finished projects take no new work
+
+
 def test_the_organisation_default_is_a_setting(call, org, make_project):
     project = make_project(key="DEF")
     admin, lead = org["admin"], org["team_lead"]
@@ -175,6 +185,45 @@ def test_email_channel_is_best_effort(call, org, make_project, monkeypatch):
                 org["project_manager"]["token"])[0] == 201                   # the change still succeeds
     assert len(_messages(call, member)) == 2
     settings.invalidate()
+
+
+def test_admin_can_test_email_delivery_and_see_why_it_fails(call, org, monkeypatch):
+    admin = org["admin"]
+    assert call("POST", "/notifications/test-email", None, org["project_manager"]["token"])[0] == 403
+    status, body = call("POST", "/notifications/test-email", None, admin["token"])
+    assert status == 200 and body["sent"] is False and "No sender address" in body["error"]
+
+    monkeypatch.setattr(notify, "ENV", type("E", (), {"notify_from_email": "tracker@acme.example"}))
+    sent = []
+    monkeypatch.setattr(notify, "_send", lambda to, subject, text: sent.append((to, subject)))
+    body = call("POST", "/notifications/test-email", None, admin["token"])[1]
+    assert body == {"to": admin["email"], "from": "tracker@acme.example", "enabled": False, "sent": True, "error": None}
+    assert sent == [(admin["email"], "ACME Project Tracker test email")]
+
+    def refuse(*_args):
+        raise PermissionError("AccessDenied: not authorized to perform ses:SendEmail")
+
+    monkeypatch.setattr(notify, "_send", refuse)
+    body = call("POST", "/notifications/test-email", None, admin["token"])[1]
+    assert body["sent"] is False and body["error"].startswith("PermissionError: AccessDenied")
+
+
+def test_whoever_can_edit_a_deliverable_can_link_it(call, org, make_project):
+    project = make_project(key="LNK", edit_access="members")
+    pm, pm2, lead = org["project_manager"], org["pm2"], org["team_lead"]
+    mine = _item(call, org, project, owner_id=pm2["id"])            # pm2 is the assignee, not the project's manager
+    other = _item(call, org, project)
+    status, link = call("POST", f"/deliverables/{mine['key']}/links", {"type": "is_blocked_by", "target": other["key"]},
+                        pm2["token"])
+    assert status == 201
+    assert call("DELETE", f"/deliverables/{mine['key']}/links/{link['id']}", token=pm2["token"])[0] == 204
+    status, body = call("POST", f"/deliverables/{other['key']}/links", {"type": "blocks", "target": mine["key"]},
+                        lead["token"])
+    assert status == 403 and "can edit this deliverable" in body["error"]["message"]     # not a member here
+    assert call("POST", f"/deliverables/{other['key']}/links", {"type": "blocks", "target": mine["key"]},
+                org["viewer"]["token"])[0] == 403
+    assert call("POST", f"/deliverables/{other['key']}/links", {"type": "blocks", "target": mine["key"]},
+                pm["token"])[0] == 201
 
 
 # --- mentions ---------------------------------------------------------------------------------------------------

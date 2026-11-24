@@ -28,16 +28,16 @@ import ToneChip from '../../components/ToneChip';
 
 function userFields(meta, isEdit, minPassword, teams) {
   return [
-    { name: 'name', label: 'Full name', required: true },
-    { name: 'email', label: 'Email', type: 'email', required: true },
-    { name: 'role', label: 'Role', type: 'select', required: true, defaultValue: 'team_member', options: toOptions(meta?.roles) },
-    { name: 'team_id', label: 'Team', type: 'select', numeric: true, options: teams },
-    { name: 'job_title', label: 'Job title' },
-    { name: 'weekly_capacity_hours', label: 'Weekly capacity (hours)', type: 'number', min: 0, max: 168, step: 'any',
+    { name: 'name', label: 'Full name', required: true, section: 'Person' },
+    { name: 'email', label: 'Email', type: 'email', required: true, section: 'Person' },
+    { name: 'role', label: 'Role', type: 'select', required: true, section: 'Role and team', defaultValue: 'team_member', options: toOptions(meta?.roles) },
+    { name: 'team_id', label: 'Team', type: 'select', numeric: true, options: teams, section: 'Role and team' },
+    { name: 'job_title', label: 'Job title', section: 'Role and team' },
+    { name: 'weekly_capacity_hours', label: 'Weekly capacity', suffix: 'hours', section: 'Role and team', type: 'number', min: 0, max: 168, step: 'any',
       defaultValue: meta?.settings?.['capacity.default_weekly_hours'] ?? 40 },
-    ...(isEdit ? [{ name: 'is_active', label: 'Active (can sign in)', type: 'switch' }] : []),
+    ...(isEdit ? [{ name: 'is_active', label: 'Active (can sign in)', type: 'switch', section: 'Sign-in' }] : []),
     {
-      name: 'password', label: isEdit ? 'New password' : 'Password', type: 'password', minLength: minPassword,
+      name: 'password', label: isEdit ? 'New password' : 'Password', type: 'password', section: 'Sign-in', minLength: minPassword,
       autoComplete: 'new-password',
       helperText: isEdit ? 'Leave blank to keep the current password. Changing it signs the user out.' : 'Leave blank for people who do not sign in.',
     },

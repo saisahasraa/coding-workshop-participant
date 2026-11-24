@@ -31,6 +31,12 @@ def _deliverable(request: Request) -> dict:
     return fetch(DELIVERABLES, request.user, record_id_from(DELIVERABLES, request.params["id"]))
 
 
+def _require_edit(user: dict, deliverable: dict) -> None:
+    """Linking changes a deliverable, so it needs the same right as editing it."""
+    if not DELIVERABLES.policy.record_permissions(user, deliverable)["update"]:
+        raise Forbidden("Only people who can edit this deliverable can change its links")
+
+
 def _manages(user: dict, deliverable: dict) -> bool:
     return is_admin(user) or (has_role(user, PROJECT_MANAGER) and deliverable["project_manager_id"] == user["id"])
 
@@ -214,8 +220,7 @@ def _creates_cycle(source_id: int, target_id: int) -> bool:
 def add_link(request: Request) -> dict:
     """POST /deliverables/{id}/links ``{"type": "blocks|is_blocked_by|relates_to", "target": "ENG-3"}``."""
     deliverable = _deliverable(request)
-    if not _manages(request.user, deliverable):
-        raise Forbidden("Only the project's manager can link work items")
+    _require_edit(request.user, deliverable)
     values = validate_fields(LINK_FIELDS, request.body)
     try:
         target = fetch(DELIVERABLES, request.user, record_id_from(DELIVERABLES, values["target"]))
@@ -251,8 +256,7 @@ def add_link(request: Request) -> dict:
 def delete_link(request: Request) -> dict:
     """DELETE /deliverables/{id}/links/{link_id}."""
     deliverable = _deliverable(request)
-    if not _manages(request.user, deliverable):
-        raise Forbidden("Only the project's manager can unlink work items")
+    _require_edit(request.user, deliverable)
     link_id = parse_id(request.params["link_id"])
     row = db.fetch_one("SELECT id, source_id, target_id, type FROM deliverable_links WHERE id = %s"
                        " AND (source_id = %s OR target_id = %s)", (link_id, deliverable["id"], deliverable["id"]))

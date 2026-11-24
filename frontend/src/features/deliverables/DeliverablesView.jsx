@@ -56,7 +56,8 @@ export default function DeliverablesView({
   const list = useListQuery({ sort: 'due_date', filters: ['status', 'overdue', 'unassigned', ...(ownerFixed ? [] : ['owner_id'])] });
   const [editing, setEditing] = useState(null); // {} = new, record = edit
   const [deleting, setDeleting] = useState(null);
-  const lookups = useLookups(['assignees'], Boolean(editing));
+  const pickProject = projectId === null;   // creating from a list that spans projects
+  const lookups = useLookups(pickProject ? ['assignees', 'openProjects'] : ['assignees'], Boolean(editing));
   const statuses = useMemo(() => (meta?.deliverable_statuses || []).map((s) => s.value), [meta]);
 
   const { query } = list;
@@ -81,7 +82,7 @@ export default function DeliverablesView({
       await deliverablesApi.update(editing.id, values);
       notify('Deliverable updated');
     } else {
-      await deliverablesApi.create({ ...values, project_id: projectId });
+      await deliverablesApi.create(pickProject ? values : { ...values, project_id: projectId });
       notify('Deliverable added');
     }
     refresh();
@@ -185,8 +186,9 @@ export default function DeliverablesView({
         <FormDialog
           open
           title={editing.id ? `Edit ${editing.name}` : 'Add deliverable'}
+          subtitle={editing.id ? `${editing.key} in ${editing.project_name}` : 'A piece of work with an owner and a due date.'}
           fields={deliverableFields(meta, lookups, editing.id
-            ? { start: editing.project_start_date, end: editing.project_end_date } : projectDates)}
+            ? { start: editing.project_start_date, end: editing.project_end_date } : projectDates, pickProject && !editing.id)}
           initialValues={editing}
           editableFields={editing.id ? editing.permissions.editable_fields : null}
           submitLabel={editing.id ? 'Save' : 'Add'}

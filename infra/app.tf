@@ -19,6 +19,13 @@ locals {
     JWT_SECRET     = random_password.jwt_secret.result
     ADMIN_EMAIL    = var.app_admin_email
     ADMIN_PASSWORD = coalesce(var.app_admin_password, random_password.admin.result)
+
+    # Attachments: the bucket, and (locally only) the LocalStack address the browser can reach for signed links.
+    ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.bucket
+    S3_PUBLIC_ENDPOINT = data.aws_caller_identity.this.id == "000000000000" ? "http://localhost:4566" : ""
+
+    # Notification emails: only sent when this is set and the admin setting notifications.email_enabled is on.
+    NOTIFY_FROM_EMAIL = var.app_notify_from_email
   }
 }
 

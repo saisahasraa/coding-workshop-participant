@@ -71,9 +71,9 @@ All use the password `Demo#2026!` (the administrator's password is the Terraform
 
 | Suite | Command | Result (last run) |
 |-------|---------|-------------------|
-| Backend unit + integration, lint, security scan | `./bin/run-tests.sh backend` | 309 tests, 99% coverage |
-| Frontend unit + component, lint | `./bin/run-tests.sh frontend` | 139 tests, 93% line coverage |
-| End to end (Playwright, real stack) incl. accessibility | `./bin/run-e2e.sh` | 12 tests |
+| Backend unit + integration, lint, security scan | `./bin/run-tests.sh backend` | 331 tests, 99% coverage |
+| Frontend unit + component, lint | `./bin/run-tests.sh frontend` | 157 tests, 95% line coverage |
+| End to end (Playwright, real stack) incl. accessibility | `./bin/run-e2e.sh` | 14 tests |
 | Load | `./bin/load-test.py` | 120 requests, 0 errors, p95 under 400 ms locally |
 | Smoke | `./bin/smoke-test.sh [site-url]` | 14 checks |
 | UI review screenshots | `cd frontend && npm run screenshots -- --theme all --viewport all` | one PNG per page, viewport and mode |
@@ -93,6 +93,14 @@ and runs axe accessibility checks (WCAG 2 A/AA) on the main pages in light and d
 - **Statuses stay consistent**: linking an unfinished blocker blocks the work; finishing, unlinking or
   deleting the blocker releases it; blocked work cannot be started. The rules table is in the plan
   ("State rules").
+- **Who may contribute is configurable**: each project says who may add and edit deliverables and who may
+  comment (everyone except viewers, or project members only), with organisation defaults in Settings. The
+  assignee and reporter of a deliverable can always edit it; deleting and linking stay with the manager.
+- **Notifications**: the bell tells people when they are assigned, mentioned, or when work or projects they
+  are part of change. Email through SES is built as a switchable channel but **off**: the workshop account
+  grants no SES permission and the Lambda has no route to SES.
+- **Comments** support `@mentions` and attachments. Files go from the browser straight to a private S3
+  bucket through short-lived signed links; the **Artifacts** panel lists every file of a deliverable.
 - **Tunable without a redeploy**: thresholds, categories, working days, page sizes, token lifetimes and
   lockout limits are settings an admin edits in **Settings**; each change is in the **Audit log**.
 
@@ -105,7 +113,8 @@ Base path `/api/v1`. Send `Authorization: Bearer <access token>`. Errors share o
 |------|-----------|
 | Session | `POST /auth/login`, `POST /auth/refresh`, `GET/PUT /auth/me`, `POST /auth/logout-all` |
 | Collections (list, create, read, update, delete) | `/users`, `/departments`, `/teams`, `/projects`, `/deliverables`, `/leaves`, `/expenses` |
-| Deliverable collaboration | `/deliverables/{key}/comments`, `/comments/{id}`, `/deliverables/{key}/links` |
+| Deliverable collaboration | `/deliverables/{key}/comments`, `/comments/{id}`, `/deliverables/{key}/links`, `/deliverables/{key}/attachments`, `/attachments/{id}`, `/attachments/{id}/download` |
+| Notifications | `GET /notifications`, `POST /notifications/read` |
 | Project views | `GET /projects/{key}/team`, `GET /projects/{key}/dependencies` |
 | Reports | `GET /reports/summary`, `/reports/capacity`, `/reports/budget` |
 | Search | `GET /search?q=` |
@@ -137,8 +146,10 @@ deliverables can be addressed by key (`/projects/WEB`, `/deliverables/WEB-2`).
 
 ## Known gaps
 
-- No email notifications, file attachments, custom statuses or holiday calendar. The plan describes where
-  each one plugs in (audit log, settings, search providers).
+- Email delivery of notifications is switched off (see above); custom statuses and a holiday calendar are
+  not built. The plan describes where each plugs in.
+- Deleting an attachment removes its record; the object stays in the bucket (the Lambda cannot reach S3 to
+  delete it from inside the VPC).
 - Work blocked by a deliverable in a *cancelled* project stays blocked until someone unlinks it.
 - The dependency graph draws columns by depth; very large graphs scroll rather than re-flow.
 - Single currency, single organisation.

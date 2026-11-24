@@ -47,3 +47,33 @@ resource "aws_s3_bucket_website_configuration" "this" {
     key = "index.html"
   }
 }
+
+# Private bucket for files attached to comments. Browsers upload and download through short-lived
+# signed links issued by the API, so nothing in it is public.
+resource "aws_s3_bucket" "attachments" {
+  bucket        = format("%s-attachments-%s", var.aws_project, local.app_id)
+  force_destroy = true
+
+  tags = local.app_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "attachments" {
+  bucket                  = aws_s3_bucket.attachments.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# The signed link is the authorisation, so any origin may use one; only PUT (upload) and GET (download).
+resource "aws_s3_bucket_cors_configuration" "attachments" {
+  bucket = aws_s3_bucket.attachments.id
+
+  cors_rule {
+    allowed_methods = ["GET", "PUT"]
+    allowed_origins = ["*"]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}

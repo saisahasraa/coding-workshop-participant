@@ -179,12 +179,15 @@ def test_cannot_complete_while_blocked(call, org, make_project):
     assert call("PUT", f"/deliverables/{item['key']}", {"status": "completed"}, member["token"])[0] == 200
 
 
-def test_only_project_managers_link_and_hidden_items_are_omitted(call, org, make_project):
+def test_links_need_edit_rights_and_hidden_items_cannot_be_linked_or_seen(call, org, make_project):
     pm, member = org["project_manager"], org["team_member"]
     open_item = _deliverable(call, make_project(key="OPEN"), pm["token"], owner_id=member["id"])
     secret_item = _deliverable(call, make_project(key="SEC", visibility="members"), pm["token"])
+    status, body = call("POST", f"/deliverables/{open_item['key']}/links", {"type": "relates_to", "target": "SEC-1"},
+                        member["token"])
+    assert status == 400 and body["error"]["details"] == {"target": "SEC-1 not found"}     # may link, cannot see it
     assert call("POST", f"/deliverables/{open_item['key']}/links", {"type": "relates_to", "target": "SEC-1"},
-                member["token"])[0] == 403
+                org["viewer"]["token"])[0] == 403
     assert call("POST", f"/deliverables/{open_item['key']}/links", {"type": "relates_to", "target": secret_item["key"]},
                 pm["token"])[0] == 201
     assert call("GET", f"/deliverables/{open_item['key']}/links", token=member["token"])[1]["data"] == []

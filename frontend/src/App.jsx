@@ -18,6 +18,7 @@ import LoginPage from './auth/LoginPage';
 import RequireAuth from './auth/RequireAuth';
 import AppShell from './components/AppShell';
 import GlobalSearch from './components/GlobalSearch';
+import NotificationBell from './components/NotificationBell';
 import { useMeta } from './meta/MetaContext';
 
 // Pages are lazy-loaded so each route only downloads its own code.
@@ -61,7 +62,7 @@ function Shell() {
   const { user, can, logout } = useAuth();
   const { appName } = useMeta();
   const navItems = NAV.filter((item) => item.visible(can)).map(({ label, to, icon, section }) => ({ label, to, icon, section }));
-  return <AppShell appName={appName} navItems={navItems} user={user} onLogout={logout} search={<GlobalSearch />} />;
+  return <AppShell appName={appName} navItems={navItems} user={user} onLogout={logout} search={<GlobalSearch />} notifications={<NotificationBell />} />;
 }
 
 /** Route table. */

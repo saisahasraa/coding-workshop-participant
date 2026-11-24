@@ -9,8 +9,8 @@ import { toOptions } from '../../utils/format';
 export default function leaveFields(meta, people) {
   const types = toOptions(meta?.settings?.['leaves.types'] || ['vacation', 'sick', 'training', 'other']);
   return [
-    ...(people ? [{ name: 'user_id', label: 'Person', type: 'select', numeric: true, required: true, options: people }] : []),
-    { name: 'type', label: 'Type', type: 'select', required: true, options: types, defaultValue: types[0].value },
+    ...(people ? [{ name: 'user_id', label: 'Person', type: 'select', numeric: true, required: true, person: true, wide: true, options: people }] : []),
+    { name: 'type', label: 'Type', type: 'select', required: true, wide: true, options: types, defaultValue: types[0].value },
     { name: 'start_date', label: 'First day', type: 'date', required: true },
     { name: 'end_date', label: 'Last day', type: 'date', required: true, helperText: 'Weekends and non-working days are not counted.' },
     { name: 'note', label: 'Note', type: 'textarea' },

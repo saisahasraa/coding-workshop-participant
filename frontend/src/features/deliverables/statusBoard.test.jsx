@@ -103,3 +103,42 @@ describe('Board view', () => {
     await waitFor(() => expect(queries.at(-1).owner_id).toBeUndefined());
   });
 });
+
+describe('Adding a deliverable from the all-deliverables list', () => {
+  const projects = [
+    { id: 7, key: 'WEB', name: 'Website relaunch', permissions: { add_deliverables: true } },
+    { id: 8, key: 'PAY', name: 'Payments', permissions: { add_deliverables: false } },
+  ];
+
+  it('asks for the project and offers only projects the person may add to', async () => {
+    let created;
+    const projectQueries = [];
+    server.use(...sessionHandlers('team_member'), list([]),
+      http.get(apiUrl('/projects'), ({ request }) => { projectQueries.push(Object.fromEntries(new URL(request.url).searchParams)); return HttpResponse.json(page(projects)); }),
+      http.get(apiUrl('/users'), () => HttpResponse.json(page([{ id: 5, name: 'Dan Okafor' }]))),
+      http.post(apiUrl('/deliverables'), async ({ request }) => { created = await request.json(); return HttpResponse.json({ ...DELIVERABLE, ...created }, { status: 201 }); }));
+    renderWithApp(<DeliverablesPage />, { route: '/deliverables' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Add deliverable' }));
+    const dialog = await screen.findByRole('dialog');
+    for (const section of ['Basics', 'People and status', 'Plan']) expect(within(dialog).getByRole('heading', { name: section })).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByLabelText(/^Project/));
+    const options = await screen.findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['WEB · Website relaunch']);          // PAY does not allow it
+    await userEvent.click(options[0]);
+    expect(projectQueries[0]).toMatchObject({ status: 'planning,active,on_hold' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^Name/), 'Press kit');
+    await userEvent.click(within(dialog).getByLabelText('Assignee'));                        // searchable people picker
+    await userEvent.click(await screen.findByRole('option', { name: /Dan Okafor/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(created).toMatchObject({ project_id: 7, name: 'Press kit', owner_id: 5, status: 'not_started', priority: 'medium' }));
+  });
+
+  it('is not offered to viewers', async () => {
+    server.use(...sessionHandlers('viewer'), list([]));
+    renderWithApp(<DeliverablesPage />, { route: '/deliverables' });
+    await screen.findByText('No deliverables match.');
+    expect(screen.queryByRole('button', { name: 'Add deliverable' })).not.toBeInTheDocument();
+  });
+});

@@ -44,6 +44,10 @@ const PAGES = {
   audit: '/admin/audit',
   profile: '/profile',
   status: '/status',
+  // Dialogs: open the page, then click the named button before taking the picture.
+  'new-project': { path: '/projects', click: 'New project' },
+  'new-deliverable': { path: '/deliverables', click: 'Add deliverable' },
+  'edit-project': { path: '/projects/WEB', click: 'Edit' },
 };
 const VIEWPORTS = { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } };
 
@@ -71,9 +75,14 @@ try {
       }, [refreshToken, theme]);
       const page = await context.newPage();
       for (const name of pages) {
-        await page.goto(BASE + PAGES[name], { waitUntil: 'networkidle' });
+        const target = typeof PAGES[name] === 'string' ? { path: PAGES[name] } : PAGES[name];
+        await page.goto(BASE + target.path, { waitUntil: 'networkidle' });
         // Pages show an indeterminate bar while their data loads: wait for it to go, then for transitions to end.
         await page.waitForFunction(() => !document.querySelector('main .MuiLinearProgress-indeterminate'), null, { timeout: 30000 }).catch(() => {});
+        if (target.click) {
+          await page.getByRole('button', { name: target.click, exact: true }).first().click().catch(() => {});
+          await page.waitForLoadState('networkidle');
+        }
         await page.waitForTimeout(500);
         const file = path.join(OUT, `${name}.${viewport}.${theme}.png`);
         await page.screenshot({ path: file, fullPage: true });

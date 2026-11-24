@@ -14,7 +14,7 @@ from collections.abc import Iterable
 
 from app import db
 from app.config import ENV, get_setting
-from app.http import Request, no_content, ok
+from app.http import Forbidden, Request, no_content, ok
 from app.validation import parse_id
 
 logger = logging.getLogger(__name__)
@@ -37,25 +37,43 @@ def push(request: Request, user_ids: Iterable[int | None], kind: str, message: s
         _email(recipients, message, link)
 
 
-def _email(recipients: list[int], message: str, link: str | None) -> None:
-    """Best-effort email through SES; problems are logged and never raised."""
-    try:
-        import boto3  # pylint: disable=import-outside-toplevel  (present in the Lambda runtime only)
-        from botocore.config import Config  # pylint: disable=import-outside-toplevel
+def _send(to: str, subject: str, body: str) -> None:
+    """Send one email through SES. Short timeouts: a missing network route must not hang the request."""
+    import boto3  # pylint: disable=import-outside-toplevel  (present in the Lambda runtime only)
+    from botocore.config import Config  # pylint: disable=import-outside-toplevel
 
-        client = boto3.client("ses", config=Config(connect_timeout=2, read_timeout=3, retries={"max_attempts": 1}))
+    client = boto3.client("ses", config=Config(connect_timeout=2, read_timeout=3, retries={"max_attempts": 1}))
+    client.send_email(Source=ENV.notify_from_email, Destination={"ToAddresses": [to]},
+                      Message={"Subject": {"Data": subject[:120]}, "Body": {"Text": {"Data": body}}})
+
+
+def _email(recipients: list[int], message: str, link: str | None) -> None:
+    """Best-effort email to the recipients; problems are logged and never raised."""
+    try:
         rows = db.fetch_all("SELECT email FROM users WHERE id = ANY(%s) AND is_active", (recipients,))
-        body = message + (f"\n\nOpen: {link}" if link else "")
         for row in rows:
-            client.send_email(
-                Source=ENV.notify_from_email,
-                Destination={"ToAddresses": [row["email"]]},
-                Message={"Subject": {"Data": message[:120]}, "Body": {"Text": {"Data": body}}},
-            )
+            _send(row["email"], message, message + (f"\n\nOpen: {link}" if link else ""))
         db.execute("UPDATE notifications SET emailed_at = now() WHERE user_id = ANY(%s) AND message = %s"
                    " AND emailed_at IS NULL", (recipients, message))
     except Exception:  # pylint: disable=broad-except
         logger.warning("Could not send notification emails", exc_info=True)
+
+
+def test_email(request: Request) -> dict:
+    """POST /notifications/test-email (admins): try to email the caller and report exactly what happened."""
+    if request.user["role"] != "admin":
+        raise Forbidden()
+    status = {"to": request.user["email"], "from": ENV.notify_from_email or None,
+              "enabled": get_setting("notifications.email_enabled")}
+    if not ENV.notify_from_email:
+        return ok({**status, "sent": False, "error": "No sender address is configured (NOTIFY_FROM_EMAIL / "
+                                                     "Terraform variable app_notify_from_email)."})
+    try:
+        _send(request.user["email"], "ACME Project Tracker test email", "Email notifications can be delivered.")
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Test email failed", exc_info=True)
+        return ok({**status, "sent": False, "error": f"{type(exc).__name__}: {exc}"[:500]})
+    return ok({**status, "sent": True, "error": None})
 
 
 def list_mine(request: Request) -> dict:

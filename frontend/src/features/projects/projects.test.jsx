@@ -23,6 +23,38 @@ function routes() {
   );
 }
 
+describe('Project form', () => {
+  it('groups fields into sections and saves who may edit and comment', async () => {
+    let update;
+    server.use(...sessionHandlers('project_manager'), ...lookups(),
+      http.get(apiUrl('/projects/WEB'), () => HttpResponse.json(PROJECT)),
+      http.get(apiUrl('/deliverables'), () => HttpResponse.json(page([]))),
+      http.put(apiUrl('/projects/7'), async ({ request }) => { update = await request.json(); return HttpResponse.json({ ...PROJECT, ...update }); }));
+    renderWithApp(routes(), { route: '/projects/WEB' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    for (const section of ['Basics', 'Ownership', 'Plan', 'Access']) expect(within(dialog).getByRole('heading', { name: section })).toBeInTheDocument();
+    expect(within(dialog).getByText('* required')).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByLabelText(/Who can add and edit deliverables/));
+    await userEvent.click(await screen.findByRole('option', { name: 'Project members only' }));
+    await userEvent.click(within(dialog).getByLabelText(/Who can comment and attach files/));
+    await userEvent.click(await screen.findByRole('option', { name: 'Everyone except viewers' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(update).toEqual({ edit_access: 'members', comment_access: 'everyone' }));
+  });
+
+  it('closes from the corner button without saving', async () => {
+    server.use(...sessionHandlers('project_manager'), ...lookups(),
+      http.get(apiUrl('/projects/WEB'), () => HttpResponse.json(PROJECT)),
+      http.get(apiUrl('/deliverables'), () => HttpResponse.json(page([]))));
+    renderWithApp(routes(), { route: '/projects/WEB' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
 describe('Projects list', () => {
   it('lists projects and passes search and filters to the API', async () => {
     const queries = [];

@@ -62,7 +62,7 @@ function ColorModeToggle() {
  * Responsive application frame: top bar, sectioned navigation and the routed page content.
  * Desktop: permanent drawer that collapses to an icon rail (remembered). Mobile: slide-over drawer.
  */
-function AppShell({ appName, navItems, user = null, onLogout = null, search = null }) {
+function AppShell({ appName, navItems, user = null, onLogout = null, search = null, notifications = null }) {
   const isDesktop = useMediaQuery({ minWidth: DESKTOP_MIN_WIDTH });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -162,6 +162,7 @@ function AppShell({ appName, navItems, user = null, onLogout = null, search = nu
           </Box>
           <Typography variant="h3" component="span" noWrap sx={{ display: { xs: 'none', sm: 'block' }, minWidth: { md: 170 } }}>{appName}</Typography>
           <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>{search}</Box>
+          {notifications}
           <ColorModeToggle />
           {user && (
             <>
@@ -232,6 +233,8 @@ AppShell.propTypes = {
   onLogout: PropTypes.func,
   /** Search box shown in the top bar. */
   search: PropTypes.node,
+  /** Notification bell shown in the top bar. */
+  notifications: PropTypes.node,
 };
 
 export default AppShell;

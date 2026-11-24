@@ -294,6 +294,13 @@ class ProjectPolicy(Policy):
     def can_delete(self, user: User, record: dict) -> bool:
         return is_admin(user) or (has_role(user, PROJECT_MANAGER) and record["manager_id"] == user["id"])
 
+    def record_permissions(self, user: User, record: dict) -> dict:
+        """The usual flags, plus whether the caller may add deliverables under the project's edit access."""
+        manages = is_admin(user) or record["manager_id"] == user["id"]
+        open_project = record["status"] not in ("completed", "cancelled")
+        allowed = manages or can_contribute(user, record["id"], record["edit_access"], "projects.default_edit_access")
+        return {**super().record_permissions(user, record), "add_deliverables": open_project and allowed}
+
 
 def _check_deliverables_within(project_id: int, start: object, end: object) -> None:
     """Reject project dates that would leave existing deliverables due outside the project."""
