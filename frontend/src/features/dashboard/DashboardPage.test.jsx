@@ -40,7 +40,7 @@ describe('Dashboard', () => {
     expect(screen.getByText(/1 without an owner/)).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: '120% of budget spent' })).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: '157.1% utilized' })).toBeInTheDocument();
-    expect(screen.getByText('Dan Okafor')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dan Okafor: all deliverables' })).toHaveAttribute('href', '/deliverables?person=5');
   });
 
   it('shows my work, except to viewers', async () => {

@@ -81,6 +81,14 @@ describe('Team page', () => {
     expect(screen.getByText(/Mar 9, 2026 – Mar 11, 2026 · 3 day\(s\)/)).toBeInTheDocument();
   });
 
+  it('opens each member\'s deliverables from their name', async () => {
+    server.use(...sessionHandlers('viewer'), ...memberHandlers());
+    renderWithApp(routes(), { route: '/teams/3' });
+    const table = await screen.findByRole('table', { name: 'Team members' });
+    expect(within(table).getByRole('link', { name: 'Dan Okafor: all deliverables' })).toHaveAttribute('href', '/deliverables?person=5');
+    expect(within(table).getByRole('link', { name: 'Erin Walsh: all deliverables' })).toHaveAttribute('href', '/deliverables?person=6');
+  });
+
   it('lets the team lead change capacity and record leave for a member', async () => {
     let capacity;
     let leave;

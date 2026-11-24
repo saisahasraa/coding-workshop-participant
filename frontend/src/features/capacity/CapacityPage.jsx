@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useMediaQuery } from 'react-responsive';
 import Alert from '@mui/material/Alert';
 import Card from '@mui/material/Card';
@@ -8,6 +8,7 @@ import CardContent from '@mui/material/CardContent';
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
 import LinearProgress from '@mui/material/LinearProgress';
+import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -26,6 +27,7 @@ import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { formatDate } from '../../utils/format';
 import UtilizationBar from './UtilizationBar';
+import PersonLink from '../../components/PersonLink';
 import ToneChip from '../../components/ToneChip';
 
 const FILTERS = ['from', 'to', 'team_id', 'department_id'];
@@ -38,6 +40,18 @@ function Status({ row }) {
 
 Status.propTypes = { row: PropTypes.object.isRequired };
 
+/** The person's team as a link to it ("No team" when they have none). */
+function TeamName({ row }) {
+  if (!row.team_id) return <Typography variant="body2" sx={{ color: 'text.secondary' }}>No team</Typography>;
+  return (
+    <Typography variant="body2">
+      <Link component={RouterLink} to={`/teams/${row.team_id}`} underline="hover" color="primary">{row.team_name}</Link>
+    </Typography>
+  );
+}
+
+TeamName.propTypes = { row: PropTypes.object.isRequired };
+
 function Projects({ row }) {
   if (!row.projects.length && !row.uncounted_count) return (
     <Typography variant="body2" sx={{
@@ -48,10 +62,12 @@ function Projects({ row }) {
     <Stack direction="row" spacing={0.5} useFlexGap sx={{
       flexWrap: "wrap"
     }}>
-      {row.projects.map((p) => <Chip key={p.project_id ?? 'other'} size="small" variant="outlined" label={`${p.key || 'Other'} · ${p.hours} h`} />)}
+      {row.projects.map((p) => (p.key
+        ? <Chip key={p.project_id} size="small" variant="outlined" clickable component={RouterLink} to={`/projects/${p.key}?tab=team`} label={`${p.key} · ${p.hours} h`} />
+        : <Chip key="other" size="small" variant="outlined" label={`Other · ${p.hours} h`} />))}
       {row.uncounted_count > 0 && (
-        <Tooltip title="Open deliverables without an estimate or a due date cannot be counted. Add both to include them.">
-          <ToneChip tone="warning" label={`${row.uncounted_count} not counted`} />
+        <Tooltip describeChild title="Open deliverables without an estimate or a due date cannot be counted. Add both to include them.">
+          <ToneChip tone="warning" clickable component={RouterLink} to={`/deliverables?person=${row.user_id}`} label={`${row.uncounted_count} not counted`} />
         </Tooltip>
       )}
     </Stack>
@@ -134,11 +150,7 @@ export default function CapacityPage() {
                     justifyContent: "space-between",
                     alignItems: "flex-start"
                   }}>
-                  <div><Typography sx={{
-                    fontWeight: 600
-                  }}>{row.name}</Typography><Typography variant="body2" sx={{
-                    color: "text.secondary"
-                  }}>{row.team_name || 'No team'}</Typography></div>
+                  <div><Typography><PersonLink id={row.user_id} name={row.name} /></Typography><TeamName row={row} /></div>
                   <Status row={row} />
                 </Stack>
                 <UtilizationBar value={row.utilization_pct} over={row.over_allocated} />
@@ -165,11 +177,7 @@ export default function CapacityPage() {
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.user_id} hover>
-                      <TableCell><Typography sx={{
-                        fontWeight: 600
-                      }}>{row.name}</Typography><Typography variant="body2" sx={{
-                        color: "text.secondary"
-                      }}>{row.team_name || 'No team'}</Typography></TableCell>
+                      <TableCell><Typography><PersonLink id={row.user_id} name={row.name} /></Typography><TeamName row={row} /></TableCell>
                       <TableCell align="right">{row.capacity_hours}</TableCell>
                       <TableCell align="right">{row.leave_hours}</TableCell>
                       <TableCell align="right">{row.available_hours}</TableCell>

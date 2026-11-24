@@ -84,12 +84,15 @@ describe('Board view', () => {
 
   it('narrows to one person\'s work and filters unassigned', async () => {
     const queries = [];
-    server.use(...sessionHandlers('project_manager'), http.get(apiUrl('/deliverables'), ({ request }) => {
-      queries.push(Object.fromEntries(new URL(request.url).searchParams));
-      return HttpResponse.json(page([DELIVERABLE]));
-    }));
+    server.use(...sessionHandlers('project_manager'),
+      http.get(apiUrl('/users/5'), () => HttpResponse.json({ id: 5, name: 'Dan Okafor' })),
+      http.get(apiUrl('/deliverables'), ({ request }) => {
+        queries.push(Object.fromEntries(new URL(request.url).searchParams));
+        return HttpResponse.json(page([DELIVERABLE]));
+      }));
     const { unmount } = renderWithApp(<DeliverablesPage />, { route: '/deliverables?person=5' });
-    await screen.findByText(/One person's deliverables/);
+    expect(await screen.findByRole('heading', { name: 'Deliverables · Dan Okafor' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'All deliverables' })).toHaveAttribute('href', '/deliverables');
     expect(queries.at(-1)).toMatchObject({ owner_id: '5' });
     unmount();
     renderWithApp(<DeliverablesPage />, { route: '/deliverables' });

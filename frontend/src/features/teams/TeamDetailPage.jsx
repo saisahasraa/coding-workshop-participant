@@ -34,6 +34,7 @@ import { formatDate } from '../../utils/format';
 import leaveFields from '../leave/leaveFields';
 import leaveLength from '../leave/leaveLength';
 import UtilizationBar from '../capacity/UtilizationBar';
+import PersonLink from '../../components/PersonLink';
 import ToneChip from '../../components/ToneChip';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -111,9 +112,7 @@ export default function TeamDetailPage() {
                   return (
                     <TableRow key={m.id} hover>
                       <TableCell>
-                        <Typography sx={{
-                          fontWeight: 600
-                        }}>{m.name}</Typography>
+                        <Typography><PersonLink id={m.id} name={m.name} /></Typography>
                         <Typography variant="body2" sx={{
                           color: "text.secondary"
                         }}>{m.job_title || m.role.replace('_', ' ')}</Typography>

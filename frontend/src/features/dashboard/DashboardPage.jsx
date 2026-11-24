@@ -19,6 +19,7 @@ import { useAuth } from '../../auth/AuthContext';
 import BarRow from '../../components/BarRow';
 import HealthChip from '../../components/HealthChip';
 import PageHeader from '../../components/PageHeader';
+import PersonLink from '../../components/PersonLink';
 import StatTile from '../../components/StatTile';
 import useApi from '../../hooks/useApi';
 import { useMeta } from '../../meta/MetaContext';
@@ -166,7 +167,7 @@ export default function DashboardPage() {
               <Box key={p.user_id} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                 <Avatar aria-hidden sx={{ width: 30, height: 30, fontSize: 12, fontWeight: 700, bgcolor: avatarColor(p.name), color: '#fff' }}>{initials(p.name)}</Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap>{p.name}</Typography>
+                  <Typography variant="body2" noWrap><PersonLink id={p.user_id} name={p.name} /></Typography>
                   <UtilizationBar value={p.utilization_pct} over={p.over_allocated} />
                 </Box>
               </Box>

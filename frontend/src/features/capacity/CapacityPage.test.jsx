@@ -13,6 +13,20 @@ const lookups = () => [
 ];
 
 describe('Capacity report', () => {
+  it('links each person to their deliverables, their team and their projects', async () => {
+    server.use(...sessionHandlers('viewer'), ...lookups(), http.get(apiUrl('/reports/capacity'), () => HttpResponse.json(CAPACITY)));
+    renderWithApp(<CapacityPage />, { route: '/capacity' });
+    const table = await screen.findByRole('table', { name: 'Capacity by person' });
+    const dan = within(table).getByRole('link', { name: 'Dan Okafor: all deliverables' });
+    expect(dan).toHaveAttribute('href', '/deliverables?person=5');
+    const row = dan.closest('tr');
+    expect(within(row).getByRole('link', { name: 'Platform' })).toHaveAttribute('href', '/teams/3');
+    expect(within(row).getByRole('link', { name: 'WEB · 48 h' })).toHaveAttribute('href', '/projects/WEB?tab=team');
+    expect(within(row).getByText('Other · 40 h').closest('a')).toBeNull();             // pooled hidden projects have nowhere to go
+    const erin = within(table).getByRole('link', { name: 'Erin Walsh: all deliverables' }).closest('tr');
+    expect(within(erin).getByRole('link', { name: '2 not counted' })).toHaveAttribute('href', '/deliverables?person=6');
+  });
+
   it('lists people with over-allocated first, and summarizes the window', async () => {
     const queries = [];
     server.use(...sessionHandlers('viewer'), ...lookups(), http.get(apiUrl('/reports/capacity'), ({ request }) => {
