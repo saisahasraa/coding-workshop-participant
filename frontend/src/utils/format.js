@@ -40,3 +40,13 @@ export function formatMoney(value, currency) {
  * @returns {{value: string, label: string}[]}
  */
 export const toOptions = (values) => (values || []).map((value) => ({ value, label: labelize(value) }));
+
+/**
+ * Format a timestamp with its time of day.
+ * @param {?string} value ISO timestamp
+ */
+export function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}

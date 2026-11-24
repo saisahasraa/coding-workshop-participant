@@ -14,7 +14,8 @@ def _money(value: object) -> float:
     return round(float(value or 0), 2)
 
 
-def _project_row(row: dict) -> dict:
+def project_row(row: dict) -> dict:
+    """Budget figures of one project row."""
     planned, spent = _money(row["planned_budget"]), _money(row["budget_spent"])
     figures = health.computed_fields(row)
     return {
@@ -44,7 +45,7 @@ def build_report(user: dict, query: dict) -> dict:
     rows = db.fetch_all(
         sql.SQL("SELECT {} FROM {}{} ORDER BY t.key").format(
             sql.SQL(PROJECTS.select), sql.SQL(PROJECTS.source), where), params)
-    projects = [_project_row(r) for r in rows]
+    projects = [project_row(r) for r in rows]
 
     ids = [p["id"] for p in projects]
     by_category = db.fetch_all(

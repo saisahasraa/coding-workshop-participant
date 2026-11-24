@@ -341,15 +341,20 @@ LEFT JOIN LATERAL (SELECT sum(amount) AS spent FROM expenses WHERE project_id = 
 """
 
 
-def _project_ids_with_health(levels: list[str], user: User) -> list[int]:
-    """Ids of the visible projects whose health is one of ``levels`` (health is computed in Python)."""
+def visible_project_rows(user: User) -> list[dict]:
+    """Every project the user can see, with its computed figures (raw rows, hidden columns included)."""
     scope = project_visibility("t", user)
     query = sql.SQL("SELECT {} FROM {}").format(sql.SQL(PROJECTS.select), sql.SQL(PROJECTS.source))
     params: list = []
     if scope is not None:
         query += sql.SQL(" WHERE ({})").format(scope[0])
         params = scope[1]
-    return [row["id"] for row in db.fetch_all(query, params) if health.computed_fields(row)["health"] in levels]
+    return db.fetch_all(query, params)
+
+
+def _project_ids_with_health(levels: list[str], user: User) -> list[int]:
+    """Ids of the visible projects whose health is one of ``levels`` (health is computed in Python)."""
+    return [row["id"] for row in visible_project_rows(user) if health.computed_fields(row)["health"] in levels]
 
 PROJECTS = Resource(
     name="projects",
@@ -824,7 +829,40 @@ EXPENSES = Resource(
 )
 
 
-RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, TEAMS, PROJECTS, DELIVERABLES, LEAVES, EXPENSES)
+# ---------------------------------------------------------------------------
+# Audit log (read-only, admins)
+# ---------------------------------------------------------------------------
+
+class AuditPolicy(Policy):
+    """Only admins read the audit trail; nobody writes it through the API."""
+
+    def actions(self, user: User) -> frozenset[str]:
+        return frozenset({READ}) if is_admin(user) else frozenset()
+
+
+AUDIT_LOG = Resource(
+    name="audit-log",
+    table="audit_log",
+    fields={},
+    policy=AuditPolicy(),
+    select="t.*, u.name AS actor_name",
+    source="audit_log t LEFT JOIN users u ON u.id = t.actor_id",
+    filters={
+        "entity": Filter("t.entity", "string", multi=True),
+        "entity_id": Filter("t.entity_id", "string"),
+        "actor_id": Filter("t.actor_id", "ref", me=True),
+        "action": Filter("t.action", "enum", multi=True, choices=("create", "update", "delete")),
+        "from": Filter("t.created_at::date", "date", op=">="),
+        "to": Filter("t.created_at::date", "date", op="<="),
+    },
+    search=("t.entity", "t.entity_id", "u.name"),
+    sorts={"created_at": "t.created_at", "entity": "t.entity", "action": "t.action", "actor": "u.name"},
+    default_sort="-created_at",
+    read_only=True,
+)
+
+
+RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, TEAMS, PROJECTS, DELIVERABLES, LEAVES, EXPENSES, AUDIT_LOG)
 
 
 def capabilities(user: User) -> dict[str, list[str]]:
@@ -832,5 +870,4 @@ def capabilities(user: User) -> dict[str, list[str]]:
     caps = {r.name: sorted(r.policy.actions(user)) for r in RESOURCES}
     if is_admin(user):
         caps["settings"] = ["read", "update"]
-        caps["audit_log"] = ["read"]
     return caps

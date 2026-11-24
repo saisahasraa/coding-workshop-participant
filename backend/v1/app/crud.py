@@ -75,6 +75,7 @@ class Resource:  # pylint: disable=too-many-instance-attributes
     before_write: Callable[[WriteContext], None] | None = None
     before_delete: Callable[[Request, dict], None] | None = None
     resolve: Callable[[str], int] | None = None  # maps a path segment (e.g. a key like ENG-12) to an id
+    read_only: bool = False  # only the two GET routes exist (e.g. the audit log)
     after_write: Callable[[WriteContext, int], None] | None = None  # runs after an update is saved
     computed: Callable[[dict], dict] | None = None  # derives extra fields from a row for the API shape
 
@@ -336,10 +337,24 @@ def delete_record(resource: Resource, request: Request) -> dict:
     return no_content()
 
 
+def search_records(resource: Resource, user: dict, text: str, limit: int, **filters: str) -> list[dict]:
+    """The first ``limit`` visible rows matching ``text`` in the resource's search columns."""
+    where, params = _where(resource, user, {"q": text, **filters})
+    rows = db.fetch_all(
+        sql.SQL("SELECT {} FROM {}{} ORDER BY {} LIMIT %s").format(
+            sql.SQL(resource.select), resource.from_sql, where, _order_by(resource, None)),
+        [*params, limit],
+    )
+    return [represent(resource, user, r) for r in rows]
+
+
 def register(router: Router, resource: Resource) -> None:
-    """Add the five CRUD routes for ``resource``."""
+    """Add the CRUD routes for ``resource`` (just the reads when it is read-only)."""
     base = f"/{resource.name}"
     router.add("GET", base, lambda r: list_records(resource, r))
+    if resource.read_only:
+        router.add("GET", base + "/{id}", lambda r: get_record(resource, r))
+        return
     router.add("POST", base, lambda r: create_record(resource, r))
     router.add("GET", base + "/{id}", lambda r: get_record(resource, r))
     router.add("PUT", base + "/{id}", lambda r: update_record(resource, r))

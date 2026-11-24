@@ -637,13 +637,28 @@ Statuses are not free-form labels: the API keeps them consistent, whichever way 
 
 Known decisions left as they are: work blocked by a deliverable of a *cancelled* project stays blocked until someone unlinks it; 100% progress does not complete work by itself.
 
-### Phase 4 — Admin console, dashboard & search
+### Phase 4 — Admin console, dashboard & search (Q1–Q7 at a glance)
 
-- Settings page (live tuning, reset, history); audit log viewer.
-- Dashboard: KPI tiles, status and health charts, at-risk table, capacity chart, budget burn (`/reports/summary` + existing reports).
-- Global search (`/search`) in the app bar.
+> **Design.** Everything here reads what Phases 1–3 already compute; the only new tables are none (the audit trail exists since Phase 0).
+>
+> **1. Settings console (admin).** The API exists (`GET/PUT/DELETE /settings`). New page `Admin → Settings`: settings grouped by their prefix (app, logging, api, auth, projects, capacity, budget, health, leaves, dashboard, search), each with an editor that matches its kind (switch, choice, number with limits, text, comma-separated list), the default, who changed it and when, **Save**, **Reset to default** and **History**. Validation errors come from the registry, so the UI never duplicates limits. Changes apply within the settings cache window (`SETTINGS_CACHE_SECONDS`, 30 s) on every container.
+>
+> **2. Audit log (admin).** `GET /audit-log` is declared as a read-only resource (no write routes at all): filters `entity`, `entity_id`, `actor_id`, `action`, `from`, `to`, free-text search, newest first, with the actor's name. `Admin → Audit log` lists it, and a row opens its field-by-field changes. The settings **History** button is the same endpoint filtered to one setting.
+>
+> **3. Dashboard (everyone, home page).** One call, `GET /reports/summary`, scoped to the projects the caller can see:
+> - KPI tiles: running projects, at risk or off track, overdue deliverables, over-allocated people, budget spent.
+> - *Needs attention*: the worst projects (red first) with their reasons (Q2).
+> - Projects by health and deliverables by status as ranked bars (Q1, Q4); no pies. Counts use one hue; health keeps its status colours **and** its label.
+> - Budget burn per project and people over capacity as meter lists (Q5, Q7); *My work* for the signed-in person.
+> - Deliverable figures ignore completed and cancelled projects, so finished work does not pad the numbers. The list lengths and the "due soon" window are settings (`dashboard.*`).
+>
+> **4. Global search.** `GET /search?q=` returns projects, deliverables and people matching the text, each list limited by `search.results_per_type`. It reuses every resource's own search columns and visibility rules, so nobody finds what they could not open. The app bar's search box shows grouped results as you type and opens the pick. `app/search.py` keeps a list of providers, which is where the future AI/semantic search plugs in.
+>
+> **Tests.** Summary figures and scoping, search visibility and ranking, audit-log filters and admin-only access, read-only route set; UI tests for the dashboard, settings editing and reset, history, audit viewing, and search.
 
-✅ **Done when** an admin changes `health.amber_schedule_gap_pct` in the console and a project's health changes within ~30 s with no redeploy, and the change appears in the audit log.
+✅ **Done when** an admin changes `health.amber_schedule_gap_pct` in the console and a project's health changes within ~30 s with no redeploy, and the change appears in the audit log; the dashboard answers all seven business questions; searching `PAY` finds the project and its deliverables.
+
+> **Status: built, awaiting validation.** `dashboard.py`, `search.py`, the read-only `audit-log` resource (the engine gained `read_only`, `search_records` and a computed-fields hook), three new settings (`dashboard.list_size`, `dashboard.due_soon_days`, `search.results_per_type`); 303 backend and 122 frontend tests. The dashboard is now the home page. A person found in search opens that person's deliverables.
 
 ### Phase 5 — Quality & delivery
 

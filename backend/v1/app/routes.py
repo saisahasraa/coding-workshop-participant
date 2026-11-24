@@ -6,7 +6,7 @@ import logging
 
 import psycopg
 
-from app import admin, auth, budget, capacity, collab, crud, db, dependencies, migrations
+from app import admin, auth, budget, capacity, collab, crud, dashboard, db, dependencies, migrations, search
 from app.config import ENV
 from app.http import Request, ok, response, router
 from app.resources import RESOURCES
@@ -60,8 +60,12 @@ router.add("GET", "/deliverables/{id}/links", collab.list_links)
 router.add("POST", "/deliverables/{id}/links", collab.add_link)
 router.add("DELETE", "/deliverables/{id}/links/{link_id}", collab.delete_link)
 
+# Search
+router.add("GET", "/search", lambda request: ok(search.search(request.user, request.query)))
+
 # Reports
 router.add("GET", "/reports/capacity", lambda request: ok(capacity.build_report(request.user, request.query)))
+router.add("GET", "/reports/summary", lambda request: ok(dashboard.build_summary(request.user)))
 router.add("GET", "/reports/budget", lambda request: ok(budget.build_report(request.user, request.query)))
 
 router.add("GET", "/projects/{id}/team", lambda request: ok(capacity.project_team(request.user, request.params["id"])))

@@ -20,7 +20,7 @@ export const META = {
 const ALL = ['create', 'delete', 'read', 'update'];
 const RU = ['read', 'update'];
 export const PERMISSIONS = {
-  admin: { users: ALL, departments: ALL, teams: ALL, projects: ALL, deliverables: ALL, leaves: ALL, expenses: ALL, settings: RU, audit_log: ['read'] },
+  admin: { users: ALL, departments: ALL, teams: ALL, projects: ALL, deliverables: ALL, leaves: ALL, expenses: ALL, settings: RU, 'audit-log': ['read'] },
   project_manager: { users: ['read'], departments: ['read'], teams: ['read'], projects: ALL, deliverables: ALL, leaves: ['read'], expenses: ALL },
   team_lead: { users: RU, departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
   team_member: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
@@ -149,4 +149,47 @@ export const DEPENDENCIES = {
   ],
   edges: [{ source: 'WEB-1', target: 'WEB-2' }, { source: 'WEB-1', target: 'WEB-3' }, { source: 'OPS-4', target: 'WEB-3' }],
   longest_chain: 2,
+};
+
+export const SUMMARY = {
+  projects: { total: 5, running: 3, by_status: { planning: 1, active: 2, on_hold: 1, completed: 1, cancelled: 0 }, by_health: { green: 1, amber: 1, red: 1 } },
+  needs_attention: [
+    { id: 8, key: 'PAY', name: 'Payments', status: 'active', health: 'red', manager_name: 'Alice Morgan', progress_pct: 40, end_date: '2026-06-01',
+      health_reasons: [{ level: 'red', code: 'overdue', message: '1 deliverable overdue, the longest by 10 days' }, { level: 'amber', code: 'blocked', message: '1 deliverable blocked' }] },
+    { id: 7, key: 'WEB', name: 'Website relaunch', status: 'active', health: 'amber', manager_name: 'Bob Stone', progress_pct: 56, end_date: null,
+      health_reasons: [{ level: 'amber', code: 'schedule', message: '67% of the schedule has passed but only 56% is complete' }] },
+  ],
+  deliverables: { by_status: { not_started: 4, in_progress: 6, blocked: 1, completed: 3 }, open: 11, overdue: 2, due_soon: 3, unassigned: 1, due_soon_days: 7 },
+  budget: {
+    planned_budget: 150000, spent: 120000, burn_pct: 80, over_budget: 1,
+    top: [{ id: 8, key: 'PAY', name: 'Payments', burn_pct: 120, spent: 36000, planned_budget: 30000, over_budget: true }],
+  },
+  capacity: {
+    from: '2026-03-02', to: '2026-03-29', people: 4, over_allocated: 1, utilization_pct: 72.5,
+    top: [{ user_id: 5, name: 'Dan Okafor', utilization_pct: 157.1, over_allocated: true }, { user_id: 6, name: 'Erin Walsh', utilization_pct: 50, over_allocated: false }],
+  },
+  mine: { open: 3, overdue: 1, due_soon: 1 },
+};
+
+export const SETTINGS = {
+  data: [
+    { key: 'health.amber_schedule_gap_pct', group: 'health', kind: 'int', description: 'At risk when the schedule leads progress by more than this', default: 10, value: 10, overridden: false, minimum: 0, maximum: 100, choices: null, public: false, updated_at: null, updated_by_name: null },
+    { key: 'logging.level', group: 'logging', kind: 'choice', description: 'Backend log level', default: 'INFO', value: 'DEBUG', overridden: true, minimum: null, maximum: null, choices: ['DEBUG', 'INFO', 'WARNING', 'ERROR'], public: false, updated_at: '2026-03-01T10:00:00Z', updated_by_name: 'Ada admin' },
+    { key: 'leaves.types', group: 'leaves', kind: 'str_list', description: 'Kinds of leave', default: ['vacation', 'sick'], value: ['vacation', 'sick'], overridden: false, minimum: null, maximum: null, choices: null, public: true, updated_at: null, updated_by_name: null },
+    { key: 'capacity.working_days', group: 'capacity', kind: 'int_list', description: 'Working weekdays', default: [1, 2, 3, 4, 5], value: [1, 2, 3, 4, 5], overridden: false, minimum: 1, maximum: 7, choices: null, public: true, updated_at: null, updated_by_name: null },
+    { key: 'auth.enabled', group: 'auth', kind: 'bool', description: 'A switch', default: true, value: true, overridden: false, minimum: null, maximum: null, choices: null, public: false, updated_at: null, updated_by_name: null },
+  ],
+};
+
+export const AUDIT = page([
+  { id: 3, actor_id: 1, actor_name: 'Ada admin', action: 'update', entity: 'app_settings', entity_id: 'logging.level', changes: { value: { from: 'INFO', to: 'DEBUG' } }, request_id: 'req-3', created_at: '2026-03-01T10:00:00Z' },
+  { id: 2, actor_id: 2, actor_name: 'Alice Morgan', action: 'create', entity: 'projects', entity_id: '7', changes: { after: { key: 'WEB', name: 'Website relaunch' } }, request_id: 'req-2', created_at: '2026-02-01T09:00:00Z' },
+  { id: 1, actor_id: null, actor_name: null, action: 'delete', entity: 'expenses', entity_id: '31', changes: { before: { amount: '1200.00' } }, request_id: null, created_at: '2026-01-01T09:00:00Z' },
+]);
+
+export const SEARCH = {
+  q: 'pay',
+  projects: [{ id: 8, key: 'PAY', name: 'Payments platform', status: 'active', health: 'red' }],
+  deliverables: [{ id: 21, key: 'PAY-2', name: 'Fraud rules engine', status: 'blocked', project_key: 'PAY' }],
+  people: [{ id: 5, name: 'Payton Reed', role: 'team_member', job_title: 'Backend Engineer', team_name: 'Platform' }],
 };

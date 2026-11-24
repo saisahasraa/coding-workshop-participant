@@ -3,11 +3,12 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import App from './App';
-import { page, PERMISSIONS, PROJECT, sessionHandlers, userFor } from './test/fixtures';
+import { page, PERMISSIONS, PROJECT, sessionHandlers, SUMMARY, userFor } from './test/fixtures';
 import { renderWithApp } from './test/render';
 import { apiUrl, server } from './test/server';
 
 const projects = () => http.get(apiUrl('/projects'), () => HttpResponse.json(page([PROJECT])));
+const summary = () => http.get(apiUrl('/reports/summary'), () => HttpResponse.json(SUMMARY));
 
 describe('App routing and navigation', () => {
   it('sends anonymous visitors to the login page and back after signing in', async () => {
@@ -41,10 +42,10 @@ describe('App routing and navigation', () => {
   });
 
   it('shows admin navigation and the runtime app name', async () => {
-    server.use(...sessionHandlers('admin'), projects());
-    renderWithApp(<App />, { guard: false });
+    server.use(...sessionHandlers('admin'), projects(), summary());
+    renderWithApp(<App />, { guard: false, route: '/projects' });
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
-    for (const label of ['Projects', 'My work', 'Users', 'Departments', 'System status']) {
+    for (const label of ['Dashboard', 'Projects', 'My work', 'Users', 'Departments', 'Settings', 'Audit log', 'System status']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
     expect(await screen.findByText('ACME Test Tracker')).toBeInTheDocument();
@@ -52,17 +53,19 @@ describe('App routing and navigation', () => {
   });
 
   it('hides actions and admin pages from viewers', async () => {
-    server.use(...sessionHandlers('viewer'), projects());
+    server.use(...sessionHandlers('viewer'), projects(), summary());
     renderWithApp(<App />, { guard: false, route: '/admin/users' });
-    expect(await screen.findByRole('heading', { name: 'Projects' })).toBeInTheDocument(); // redirected
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument(); // redirected home
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(nav).queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'My work' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New project' })).not.toBeInTheDocument();
   });
 
   it('signs out from the account menu', async () => {
-    server.use(...sessionHandlers('team_member'), projects());
+    server.use(...sessionHandlers('team_member'), projects(), summary());
     renderWithApp(<App />, { guard: false });
     await userEvent.click(await screen.findByRole('button', { name: 'Account menu' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
@@ -71,7 +74,7 @@ describe('App routing and navigation', () => {
   });
 
   it('collapses the navigation to an icon rail and remembers the choice', async () => {
-    server.use(...sessionHandlers('admin'), projects());
+    server.use(...sessionHandlers('admin'), projects(), summary());
     const { unmount } = renderWithApp(<App />, { guard: false });
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
     expect(within(nav).getByText('Projects')).toBeInTheDocument();
@@ -95,7 +98,7 @@ describe('App routing and navigation', () => {
   });
 
   it('uses a toggleable drawer on mobile', async () => {
-    server.use(...sessionHandlers('viewer'), projects());
+    server.use(...sessionHandlers('viewer'), projects(), summary());
     renderWithApp(<App />, { guard: false, width: 375 });
     await userEvent.click(await screen.findByRole('button', { name: 'Open navigation' }));
     await userEvent.click(await screen.findByRole('link', { name: 'System status' }));

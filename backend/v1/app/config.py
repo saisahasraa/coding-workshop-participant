@@ -188,6 +188,12 @@ SETTINGS: dict[str, Setting] = {
                 minimum=50, maximum=300, public=True),
         Setting("capacity.default_window_days", "int", 28, "Length of the default capacity report window",
                 minimum=7, maximum=366, public=True),
+        Setting("dashboard.list_size", "int", 5, "Rows shown in each dashboard list",
+                minimum=1, maximum=20),
+        Setting("dashboard.due_soon_days", "int", 7, "Deliverables due within this many days count as due soon",
+                minimum=1, maximum=60, public=True),
+        Setting("search.results_per_type", "int", 5, "Search results shown per kind (projects, deliverables, people)",
+                minimum=1, maximum=20),
         Setting("leaves.types", "str_list", ["vacation", "sick", "training", "other"],
                 "Kinds of planned leave people can record", public=True),
     )

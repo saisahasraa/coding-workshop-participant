@@ -43,7 +43,7 @@ export const DESKTOP_MIN_WIDTH = 900;
  * Responsive application frame: top bar, navigation drawer and the routed page content.
  * Desktop: permanent drawer that collapses to an icon rail (remembered). Mobile: slide-over drawer.
  */
-function AppShell({ appName, navItems, user = null, onLogout = null }) {
+function AppShell({ appName, navItems, user = null, onLogout = null, search = null }) {
   const isDesktop = useMediaQuery({ minWidth: DESKTOP_MIN_WIDTH });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -112,7 +112,8 @@ function AppShell({ appName, navItems, user = null, onLogout = null }) {
           >
             {isDesktop && !collapsed ? <MenuOpenIcon /> : <MenuIcon />}
           </IconButton>
-          <Typography variant="h3" component="span" noWrap sx={{ flexGrow: 1 }}>{appName}</Typography>
+          <Typography variant="h3" component="span" noWrap sx={{ flexGrow: { xs: 0, sm: 1 }, display: { xs: 'none', sm: 'block' } }}>{appName}</Typography>
+          <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'flex-end' }}>{search}</Box>
           {user && (
             <>
               <IconButton aria-label="Account menu" onClick={(e) => setMenuAnchor(e.currentTarget)}>
@@ -173,6 +174,8 @@ AppShell.propTypes = {
   user: PropTypes.shape({ name: PropTypes.string.isRequired, role: PropTypes.string.isRequired }),
   /** Called when the user chooses "Sign out". */
   onLogout: PropTypes.func,
+  /** Search box shown in the top bar. */
+  search: PropTypes.node,
 };
 
 export default AppShell;

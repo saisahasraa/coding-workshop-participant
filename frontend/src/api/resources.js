@@ -44,3 +44,18 @@ export const fetchBudget = (query, signal) => api.get('/reports/budget', { query
 
 /** Blocking graph of a project. @param {string} ref project key or id */
 export const fetchDependencies = (ref, signal) => api.get(`/projects/${encodeURIComponent(ref)}/dependencies`, { signal });
+
+/** Dashboard figures, scoped to what the user can see. */
+export const fetchSummary = (signal) => api.get('/reports/summary', { signal });
+
+/** Projects, deliverables and people matching `text` (at least 2 characters). */
+export const fetchSearch = (text, signal) => api.get('/search', { query: { q: text }, signal });
+
+export const auditApi = { list: (query, signal) => api.get('/audit-log', { query, signal }) };
+
+/** Runtime settings (admins). */
+export const settingsApi = {
+  list: (signal) => api.get('/settings', { signal }),
+  update: (key, value) => api.put(`/settings/${encodeURIComponent(key)}`, { value }),
+  reset: (key) => api.delete(`/settings/${encodeURIComponent(key)}`),
+};
