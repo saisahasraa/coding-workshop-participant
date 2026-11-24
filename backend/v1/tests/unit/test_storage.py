@@ -55,11 +55,12 @@ def test_download_link_names_the_file_and_only_inlines_when_asked(monkeypatch, f
     assert calls[1][1]["ResponseContentType"] == "text/html"
 
 
-def test_links_are_signed_for_the_buckets_region(monkeypatch, fake_s3):
+def test_links_use_the_buckets_regional_address(monkeypatch, fake_s3):
     _, created = fake_s3
-    _env(monkeypatch, region="us-east-1")
+    _env(monkeypatch, region="ap-south-1")
     storage.upload_link("k", "text/plain")
-    assert created["region_name"] == "us-east-1"
+    assert created["region_name"] == "ap-south-1"
+    assert created["endpoint_url"] == "https://s3.ap-south-1.amazonaws.com"   # not the global s3.amazonaws.com
 
 
 def test_local_links_use_the_browser_reachable_endpoint(monkeypatch, fake_s3):

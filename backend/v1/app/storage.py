@@ -27,8 +27,11 @@ def _client():
 
     # Locally the links must point at an address the browser can reach (LocalStack on localhost).
     style = {"addressing_style": "path"} if ENV.s3_public_endpoint else {}
-    # Links must be signed for the region the bucket lives in, which can differ from the Lambda's own.
-    return boto3.client("s3", region_name=ENV.attachments_region or None, endpoint_url=ENV.s3_public_endpoint or None,
+    # Links must name the bucket's regional address. boto3 otherwise builds them for the global
+    # s3.amazonaws.com host, which routes to us-east-1 and rejects a bucket in any other region.
+    region = ENV.attachments_region or None
+    endpoint = ENV.s3_public_endpoint or (f"https://s3.{region}.amazonaws.com" if region else None)
+    return boto3.client("s3", region_name=region, endpoint_url=endpoint,
                         config=Config(signature_version="s3v4", s3=style))
 
 
