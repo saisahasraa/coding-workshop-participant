@@ -18,7 +18,7 @@ Each metric contributes at most one reason, at its highest tier:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from app.config import get_setting
@@ -48,8 +48,8 @@ def rules_from_settings() -> Rules:
 
 
 def _today() -> date:
-    """Today's date (a function so tests can pin it)."""
-    return date.today()
+    """Today's date in UTC, the same day the database's ``current_date`` reports (a function so tests can pin it)."""
+    return datetime.now(UTC).date()
 
 
 def schedule_elapsed_pct(start: date | None, end: date | None, today: date) -> float | None:

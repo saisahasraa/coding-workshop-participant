@@ -1,6 +1,6 @@
 """Projects and deliverables: ownership, visibility, business rules, computed fields, filters."""
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app import db
 
@@ -184,7 +184,7 @@ def test_pm_cannot_move_deliverable_to_foreign_project(call, org, make_project):
 def test_deliverable_filters_and_overdue(call, org, make_project):
     project = make_project()
     pm, member = org["project_manager"], org["team_member"]
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
     _deliverable(call, project, pm["token"], name="Late", due_date=yesterday, owner_id=member["id"])
     _deliverable(call, project, pm["token"], name="Done late", due_date=yesterday, status="completed")
     _deliverable(call, project, pm["token"], name="Future", due_date="2099-01-01", priority="critical")

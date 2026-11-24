@@ -23,7 +23,7 @@ planned leave can tip someone over.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from psycopg import sql
@@ -56,8 +56,8 @@ def _overlap(a_start: date, a_end: date, b_start: date, b_end: date) -> tuple[da
 
 
 def _today() -> date:
-    """Today's date (a function so tests can pin it)."""
-    return date.today()
+    """Today's date in UTC, the same day the database's ``current_date`` reports (a function so tests can pin it)."""
+    return datetime.now(UTC).date()
 
 
 def reserved_hours(remaining: float, due: date, window: tuple[date, date], today: date,
@@ -119,7 +119,7 @@ def _parse_window(query: dict) -> tuple[date, date]:
     if errors:
         raise ValidationFailed(errors)
     days = get_setting("capacity.default_window_days")
-    start = parsed.get("from") or (parsed["to"] - timedelta(days=days - 1) if "to" in parsed else date.today())
+    start = parsed.get("from") or (parsed["to"] - timedelta(days=days - 1) if "to" in parsed else _today())
     end = parsed.get("to") or start + timedelta(days=days - 1)
     if end < start:
         raise ValidationFailed({"to": "must be on or after from"})

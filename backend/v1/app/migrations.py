@@ -303,6 +303,23 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX idx_notifications_user ON notifications (user_id, created_at DESC);
         """,
     ),
+    (
+        9,
+        "block work that was already waiting on unfinished blockers",
+        """
+        -- Linking and reopening keep blocked work blocked from now on; this brings existing data in line.
+        WITH waiting AS (
+            UPDATE deliverables d SET status = 'blocked', updated_at = now()
+             WHERE d.status IN ('not_started', 'in_progress')
+               AND EXISTS (SELECT 1 FROM deliverable_links l JOIN deliverables s ON s.id = l.source_id
+                            WHERE l.type = 'blocks' AND l.target_id = d.id AND s.status <> 'completed')
+            RETURNING d.id, d.status
+        )
+        INSERT INTO audit_log (actor_id, action, entity, entity_id, changes)
+        SELECT NULL, 'update', 'deliverables', id::text, '{"status": {"from": "waiting", "to": "blocked"}}'::jsonb
+          FROM waiting;
+        """,
+    ),
 ]
 
 _current_version: int | None = None

@@ -147,3 +147,30 @@ def test_unassigned_filter(call, org, project):
     unowned = call("GET", "/deliverables", query={"unassigned": "true"}, token=token)[1]["data"]
     assert [d["key"] for d in unowned] == [orphan["key"]]
     assert call("GET", "/deliverables", query={"unassigned": "false"}, token=token)[1]["total"] == 1
+
+
+def test_migration_9_blocks_work_that_was_already_waiting(call, org, project):
+    from app import migrations
+
+    pm = org["project_manager"]["token"]
+    blocker, waiting, free, done = (_item(call, org, project, name=n) for n in ("Blocker", "Waiting", "Free", "Done"))
+    call("PUT", f"/deliverables/{waiting['key']}", {"status": "in_progress", "progress_pct": 30}, pm)
+    call("PUT", f"/deliverables/{done['key']}", {"status": "completed"}, pm)
+    # Links made before the blocking rule existed left their targets untouched; recreate that state directly.
+    db.execute("INSERT INTO deliverable_links (source_id, target_id, type)"
+               " VALUES (%s, %s, 'blocks'), (%s, %s, 'blocks')",
+               (blocker["id"], waiting["id"], blocker["id"], done["id"]))
+    assert call("GET", f"/deliverables/{waiting['key']}", token=pm)[1]["status"] == "in_progress"
+
+    statement = next(sql for number, _name, sql in migrations.MIGRATIONS if number == 9)
+    db.execute(statement)
+
+    status = {k: call("GET", f"/deliverables/{k}", token=pm)[1]["status"]
+              for k in (waiting["key"], free["key"], done["key"], blocker["key"])}
+    assert status == {waiting["key"]: "blocked", free["key"]: "not_started", done["key"]: "completed",
+                      blocker["key"]: "not_started"}                              # only the waiting one moved
+    audit = db.fetch_one("SELECT actor_id, changes FROM audit_log WHERE entity = 'deliverables'"
+                         " AND entity_id = %s::text ORDER BY id DESC LIMIT 1", (waiting["id"],))
+    assert audit["actor_id"] is None and audit["changes"]["status"]["to"] == "blocked"
+    db.execute(statement)                                                          # safe to run again
+    assert call("GET", f"/deliverables/{waiting['key']}", token=pm)[1]["status"] == "blocked"

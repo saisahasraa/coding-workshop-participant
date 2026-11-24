@@ -3,12 +3,12 @@
 Dates are relative to today: every project starts 30 days ago and ends in 30 days (50% elapsed).
 """
 
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app import db
 from app.config import settings
 
-TODAY = date.today()
+TODAY = datetime.now(UTC).date()   # the database's "today" is UTC
 
 
 def _project(make_project, key, **fields):

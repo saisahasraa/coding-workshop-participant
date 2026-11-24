@@ -37,6 +37,9 @@ def conninfo() -> str:
         # Aurora Serverless v2 with min capacity 0 pauses when idle; resuming takes ~15 s.
         "connect_timeout": "5" if ENV.is_local else "30",
         "application_name": "acme-tracker",
+        # "Today" is the UTC date everywhere (SQL current_date, date arithmetic and Python alike), whatever
+        # time zone the database server or the machine happens to be set to.
+        "options": "-c timezone=UTC",
     }
     if not ENV.is_local:
         params["sslmode"] = "require"
