@@ -39,12 +39,9 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  custom_error_response {
-    error_code            = 404
-    error_caching_min_ttl = 300
-    response_code         = 200
-    response_page_path    = "/index.html"
-  }
+  # SPA deep links are handled by the spa_rewrite CloudFront Function on the default (S3)
+  # behavior. A distribution-wide custom_error_response would also rewrite API 404s
+  # into index.html with status 200, breaking REST semantics.
 
   # logging_config {
   #   include_cookies = false
@@ -96,6 +93,11 @@ resource "aws_cloudfront_distribution" "this" {
 
     target_origin_id       = local.origin_id
     viewer_protocol_policy = "redirect-to-https"
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = element(aws_cloudfront_function.spa_rewrite.*.arn, count.index)
+    }
 
     forwarded_values {
       query_string = false

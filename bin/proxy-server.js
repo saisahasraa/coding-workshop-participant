@@ -39,6 +39,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Request-Id');
   res.setHeader('Access-Control-Max-Age', '86400');
 
   // Handle preflight
@@ -91,18 +92,25 @@ const server = http.createServer((req, res) => {
   delete headers['sec-fetch-mode'];
   delete headers['sec-fetch-dest'];
 
-  // Keep only essential headers
+  // Keep only essential headers (plus Authorization, so bearer tokens reach the backend)
+  const forwardHeaders = {
+    'accept': headers.accept || 'application/json',
+    'content-type': headers['content-type'] || 'application/json',
+    'user-agent': headers['user-agent'] || 'proxy-server',
+    'host': target.host
+  };
+  if (headers.authorization) {
+    forwardHeaders.authorization = headers.authorization;
+  }
+  if (headers['content-length']) {
+    forwardHeaders['content-length'] = headers['content-length'];
+  }
   const options = {
     hostname: target.hostname,
     port: target.port,
     path: target.path,
     method: req.method,
-    headers: {
-      'accept': headers.accept || 'application/json',
-      'content-type': headers['content-type'] || 'application/json',
-      'user-agent': headers['user-agent'] || 'proxy-server',
-      'host': target.host
-    }
+    headers: forwardHeaders
   };
 
   const proxyReq = protocol.request(options, (proxyRes) => {

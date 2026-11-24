@@ -45,3 +45,14 @@ output "jupyter_url" {
   description = "The URL of the JupyterHub instance"
   value       = data.aws_caller_identity.this.id == "000000000000" ? "http://localhost:8888" : try(one(aws_eks_cluster.this.*.endpoint), null)
 }
+
+output "app_admin_email" {
+  description = "Email of the bootstrap admin account"
+  value       = var.app_admin_email
+}
+
+output "app_admin_password" {
+  description = "Password of the bootstrap admin account (read with: terraform output -raw app_admin_password)"
+  value       = coalesce(var.app_admin_password, random_password.admin.result)
+  sensitive   = true
+}

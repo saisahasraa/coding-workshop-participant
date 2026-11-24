@@ -1,0 +1,11 @@
+# start-dev.sh vendors pip dependencies into this folder (LocalStack hot-reload
+# mounts it as-is), so track only our own source and ignore everything else.
+/*
+!/.gitignore
+!/*.py
+!/requirements*.txt
+!/pytest.ini
+!/ruff.toml
+!/app/
+!/tests/
+!/README.md

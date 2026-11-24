@@ -83,3 +83,16 @@ variable "aws_eks_type" {
     error_message = "The aws_eks_type variable must be either 'ON_DEMAND' or 'SPOT'."
   }
 }
+
+variable "app_admin_email" {
+  description = "Email of the first admin account, created on first start when no admin exists."
+  type        = string
+  default     = "admin@acme.example"
+}
+
+variable "app_admin_password" {
+  description = "Password of the first admin account. Default: null (a random password is generated; see output app_admin_password)."
+  type        = string
+  default     = null
+  sensitive   = true
+}

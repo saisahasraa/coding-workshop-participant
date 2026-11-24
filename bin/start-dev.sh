@@ -339,8 +339,16 @@ for req in "$PROJECT_ROOT"/backend/*/requirements.txt; do
         continue
     fi
     echo -e "  Installing pip requirements for $(basename "$svc_dir")..."
-    pip install --quiet --target="$svc_dir" -r "$req" 2>/dev/null || true
-    echo "$REQS_HASH" > "$HASH_FILE"
+    # Install wheels built for the Lambda runtime (python3.13, linux x86_64), not for
+    # whatever Python the local `pip` belongs to; native packages such as psycopg-binary
+    # would otherwise fail to install or fail to import inside the Lambda container.
+    if python3 -m pip install --quiet --upgrade --target="$svc_dir" \
+        --python-version 3.13 --implementation cp --platform manylinux2014_x86_64 \
+        --only-binary=:all: -r "$req"; then
+        echo "$REQS_HASH" > "$HASH_FILE"
+    else
+        echo -e "  ⚠ pip install failed for $(basename "$svc_dir"); it will be retried on next start"
+    fi
 done
 
 # Install npm dependencies into each Node.js service directory for hot-reload

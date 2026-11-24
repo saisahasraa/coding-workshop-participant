@@ -51,7 +51,7 @@ module "lambda" {
   }
 
   environment_variables = {
-    for key, value in local.env_vars :
+    for key, value in merge(local.env_vars, local.app_env_vars) :
     key => trimspace(value) if try(trimspace(value), "") != ""
   }
 

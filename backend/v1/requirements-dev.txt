@@ -1,0 +1,6 @@
+# Local development and test tooling (not deployed to Lambda).
+-r requirements.txt
+pytest==8.4.2
+pytest-cov==7.0.0
+ruff==0.14.5
+bandit==1.8.6

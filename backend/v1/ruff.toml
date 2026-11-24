@@ -1,0 +1,16 @@
+target-version = "py313"
+line-length = 120
+include = ["function.py", "app/**/*.py", "tests/**/*.py"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "S", "SIM"]
+ignore = [
+  "S101",  # assert is how pytest expresses checks
+  "N818",  # exceptions are named after HTTP statuses (NotFound, Conflict, ...)
+]
+
+[lint.isort]
+known-first-party = ["app", "tests", "function"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]  # test fixtures use literal passwords
