@@ -13,18 +13,18 @@ export const META = {
   visibilities: ['inherit', 'everyone', 'members'],
   settings: {
     'app.name': 'ACME Test Tracker', 'budget.currency': 'USD', 'auth.password_min_length': 8, 'capacity.default_weekly_hours': 40,
-    'leaves.types': ['vacation', 'sick', 'training', 'other'],
+    'leaves.types': ['vacation', 'sick', 'training', 'other'], 'budget.expense_categories': ['labor', 'software', 'travel'],
   },
 };
 
 const ALL = ['create', 'delete', 'read', 'update'];
 const RU = ['read', 'update'];
 export const PERMISSIONS = {
-  admin: { users: ALL, departments: ALL, teams: ALL, projects: ALL, deliverables: ALL, leaves: ALL, settings: RU, audit_log: ['read'] },
-  project_manager: { users: ['read'], departments: ['read'], teams: ['read'], projects: ALL, deliverables: ALL, leaves: ['read'] },
-  team_lead: { users: RU, departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL },
-  team_member: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL },
-  viewer: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: ['read'], leaves: ['read'] },
+  admin: { users: ALL, departments: ALL, teams: ALL, projects: ALL, deliverables: ALL, leaves: ALL, expenses: ALL, settings: RU, audit_log: ['read'] },
+  project_manager: { users: ['read'], departments: ['read'], teams: ['read'], projects: ALL, deliverables: ALL, leaves: ['read'], expenses: ALL },
+  team_lead: { users: RU, departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
+  team_member: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: RU, leaves: ALL, expenses: ['read'] },
+  viewer: { users: ['read'], departments: ['read'], teams: ['read'], projects: ['read'], deliverables: ['read'], leaves: ['read'], expenses: ['read'] },
 };
 
 export const userFor = (role, id = 1) => ({
@@ -36,6 +36,8 @@ export const PROJECT = {
   id: 7, key: 'WEB', name: 'Website relaunch', description: 'New site', department_id: 1, department_name: 'Marketing',
   manager_id: 2, manager_name: 'Alice Morgan', status: 'active', priority: 'high', start_date: '2026-01-01',
   end_date: '2026-06-30', planned_budget: 120000, visibility: 'inherit', completed_at: null, progress_pct: 56,
+  budget_spent: 84000, budget_burn_pct: 70, schedule_elapsed_pct: 60, health: 'amber',
+  health_reasons: [{ level: 'amber', code: 'overdue', message: '1 deliverable overdue, the longest by 3 days' }],
   deliverables_total: 2, deliverables_completed: 1, deliverables_blocked: 0, deliverables_overdue: 1,
   permissions: { update: true, delete: true, editable_fields: null },
 };
@@ -115,4 +117,36 @@ export const PROJECT_TEAM = {
       overdue: 0, estimated_hours: 0, remaining_hours: 0, deliverables: [row(13, 'WEB-5', 'Accessibility audit', 'not_started', null, null, 0)],
     },
   ],
+};
+
+export const EXPENSE = {
+  id: 31, project_id: 7, project_key: 'WEB', project_name: 'Website relaunch', amount: '1200.00', category: 'software', spent_on: '2026-03-10',
+  description: 'Licences', created_by_name: 'Alice Morgan', permissions: { update: true, delete: true, editable_fields: ['amount', 'category', 'description', 'spent_on'] },
+};
+
+export const BUDGET = {
+  totals: { projects: 2, planned_budget: 150000, spent: 120000, remaining: 30000, burn_pct: 80, over_budget: 1 },
+  data: [
+    { id: 7, key: 'WEB', name: 'Website relaunch', status: 'active', department_name: 'Marketing', planned_budget: 120000, spent: 84000, remaining: 36000, burn_pct: 70, progress_pct: 56, over_budget: false, health: 'amber' },
+    { id: 8, key: 'PAY', name: 'Payments', status: 'active', department_name: 'Finance', planned_budget: 30000, spent: 36000, remaining: -6000, burn_pct: 120, progress_pct: 40, over_budget: true, health: 'red' },
+  ],
+  by_category: [{ category: 'labor', amount: 90000 }, { category: 'software', amount: 30000 }],
+  by_month: [{ month: '2026-02', amount: 70000 }, { month: '2026-03', amount: 50000 }],
+};
+
+const node = (key, name, status, depth, extra = {}) => ({
+  id: depth + 100, key, name, status, priority: 'high', due_date: null, project_key: key.split('-')[0], owner_name: null,
+  open_blockers: 0, depth, external: false, ready: status !== 'completed', ...extra,
+});
+
+export const DEPENDENCIES = {
+  project: { id: 7, key: 'WEB', name: 'Website relaunch' },
+  nodes: [
+    node('WEB-1', 'Design system', 'completed', 0, { ready: false }),
+    node('WEB-2', 'Build pages', 'in_progress', 1),
+    node('WEB-3', 'Content import', 'not_started', 1, { open_blockers: 1, ready: false }),
+    node('OPS-4', 'Provision hosting', 'in_progress', 0, { external: true }),
+  ],
+  edges: [{ source: 'WEB-1', target: 'WEB-2' }, { source: 'WEB-1', target: 'WEB-3' }, { source: 'OPS-4', target: 'WEB-3' }],
+  longest_chain: 2,
 };

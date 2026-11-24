@@ -137,7 +137,7 @@ export default function DeliverableDetailPage() {
             </section>
 
             <Divider />
-            <LinksSection deliverableKey={item.key} canEdit={managesProject} onChanged={reload} />
+            <LinksSection key={`${item.key}-${item.status}`} deliverableKey={item.key} canEdit={managesProject} onChanged={reload} />
             <Divider />
             <CommentsSection deliverableKey={item.key} canComment={user.role !== 'viewer'} />
           </Stack>

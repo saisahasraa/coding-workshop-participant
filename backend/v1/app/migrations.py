@@ -239,6 +239,24 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         "drop percentage allocations: workload is derived from deliverable estimates",
         "DROP TABLE allocations",
     ),
+    (
+        6,
+        "expenses",
+        """
+        CREATE TABLE expenses (
+            id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            project_id  BIGINT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+            amount      NUMERIC(14, 2) NOT NULL CHECK (amount > 0),
+            category    VARCHAR(50) NOT NULL,
+            spent_on    DATE NOT NULL,
+            description TEXT,
+            created_by  BIGINT REFERENCES users (id) ON DELETE SET NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX idx_expenses_project ON expenses (project_id, spent_on);
+        """,
+    ),
 ]
 
 _current_version: int | None = None

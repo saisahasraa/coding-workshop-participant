@@ -245,3 +245,98 @@ def test_open_blockers_count_follows_the_blockers_status(call, org, make_project
     assert call("GET", "/deliverables/ENG-3", token=pm)[1]["open_blockers"] == 1
     call("PUT", "/deliverables/ENG-2", {"status": "completed"}, pm)
     assert call("GET", "/deliverables/ENG-3", token=pm)[1]["open_blockers"] == 0
+
+
+def _blocked_pair(call, org, make_project, **second):
+    """ENG-1 blocks ENG-2, and ENG-2 is marked blocked."""
+    pm = org["project_manager"]["token"]
+    project = make_project(key="ENG")
+    for name, extra in (("First", {}), ("Second", {"status": "blocked", **second})):
+        call("POST", "/deliverables", {"project_id": project["id"], "name": name, **extra}, pm)
+    call("POST", "/deliverables/ENG-1/links", {"type": "blocks", "target": "ENG-2"}, pm)
+    return pm
+
+
+def test_finishing_the_last_blocker_releases_blocked_work(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    project_id = call("GET", "/projects/ENG", token=pm)[1]["id"]
+    third = call("POST", "/deliverables", {"project_id": project_id, "name": "Third"}, pm)[1]
+    call("POST", f"/deliverables/{third['key']}/links", {"type": "blocks", "target": "ENG-2"}, pm)
+
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "blocked"       # ENG-3 still blocks it
+    call("PUT", f"/deliverables/{third['key']}", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "not_started"
+    second_id = call("GET", "/deliverables/ENG-2", token=pm)[1]["id"]
+    changes = db.fetch_one("SELECT changes FROM audit_log WHERE entity = 'deliverables' AND entity_id = %s::text"
+                           " AND changes ? 'status' ORDER BY id DESC LIMIT 1", (second_id,))
+    assert changes["changes"]["status"] == {"from": "blocked", "to": "not_started"}
+
+
+def test_released_work_resumes_in_progress_when_it_had_started(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project, progress_pct=30)
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "in_progress"
+
+
+def test_unlinking_the_last_blocker_releases_blocked_work(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    link = call("GET", "/deliverables/ENG-1/links", token=pm)[1]["data"][0]
+    assert call("DELETE", f"/deliverables/ENG-1/links/{link['id']}", token=pm)[0] == 204
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "not_started"
+
+
+def test_work_blocked_by_hand_stays_blocked(call, org, make_project):
+    pm = org["project_manager"]["token"]
+    project = make_project(key="ENG")
+    call("POST", "/deliverables", {"project_id": project["id"], "name": "Manual", "status": "blocked"}, pm)
+    call("POST", "/deliverables", {"project_id": project["id"], "name": "Other"}, pm)
+    call("PUT", "/deliverables/ENG-2", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-1", token=pm)[1]["status"] == "blocked"
+
+
+def test_reopening_a_blocker_blocks_the_waiting_work_again(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "not_started"
+    call("PUT", "/deliverables/ENG-2", {"status": "in_progress", "progress_pct": 30}, pm)
+    call("PUT", "/deliverables/ENG-1", {"status": "in_progress"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "blocked"
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "in_progress"   # progress was kept (not 0)
+
+
+def test_reopening_does_not_touch_finished_dependents(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    call("PUT", "/deliverables/ENG-2", {"status": "completed"}, pm)
+    call("PUT", "/deliverables/ENG-1", {"status": "not_started"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "completed"
+
+
+def test_linking_an_unfinished_blocker_puts_work_on_hold(call, org, make_project):
+    pm = org["project_manager"]["token"]
+    project = make_project(key="ENG")
+    for name in ("Blocker", "Waiting", "Done"):
+        call("POST", "/deliverables", {"project_id": project["id"], "name": name,
+                                       **({"status": "completed"} if name == "Done" else {})}, pm)
+    call("POST", "/deliverables/ENG-1/links", {"type": "blocks", "target": "ENG-2"}, pm)
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "blocked"
+    call("POST", "/deliverables/ENG-3/links", {"type": "is_blocked_by", "target": "ENG-1"}, pm)  # finished stays
+    assert call("GET", "/deliverables/ENG-3", token=pm)[1]["status"] == "completed"
+    call("POST", "/deliverables/ENG-1/links", {"type": "relates_to", "target": "ENG-3"}, pm)  # never blocks
+
+
+def test_deleting_a_blocker_releases_the_work_it_held_up(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    assert call("DELETE", "/deliverables/ENG-1", token=pm)[0] == 204
+    assert call("GET", "/deliverables/ENG-2", token=pm)[1]["status"] == "not_started"
+
+
+def test_cannot_start_work_that_is_still_blocked(call, org, make_project):
+    pm = _blocked_pair(call, org, make_project)
+    status, body = call("PUT", "/deliverables/ENG-2", {"status": "in_progress"}, pm)
+    assert status == 400 and body["error"]["details"]["status"] == "cannot start while blocked by ENG-1"
+    assert call("PUT", "/deliverables/ENG-2", {"status": "blocked"}, pm)[0] == 200
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("PUT", "/deliverables/ENG-2", {"status": "in_progress"}, pm)[0] == 200

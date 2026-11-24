@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from psycopg import sql
 
-from app import db
+from app import audit, db, health
 from app.auth import check_password_policy
 from app.config import get_setting
 from app.crud import Filter, Resource, WriteContext
@@ -106,8 +106,35 @@ def _users_before_write(ctx: WriteContext) -> None:
             raise ValidationFailed({"role": "you cannot change your own role"})
         if values.get("is_active") is False:
             raise ValidationFailed({"is_active": "you cannot deactivate your own account"})
+    _check_user_can_step_back(ctx)
     if ctx.changed("role") or ctx.changed("is_active") or "password_hash" in values:
         values["token_version"] = existing["token_version"] + 1  # sign the user out everywhere
+
+
+def _check_user_can_step_back(ctx: WriteContext) -> None:
+    """Deactivating or demoting someone must not strand what they hold.
+
+    People who own unfinished work stay assignable; managers keep no open projects; a team loses its lead
+    when its lead is no longer one.
+    """
+    values, user_id = ctx.values, ctx.existing["id"]
+    deactivated = ctx.changed("is_active") and values["is_active"] is False
+    role = values.get("role", ctx.existing["role"])
+    field = "is_active" if deactivated else "role"
+    if deactivated or (ctx.changed("role") and role == VIEWER):
+        owned = db.fetch_one("SELECT count(*) AS n FROM deliverables WHERE owner_id = %s AND status <> 'completed'",
+                             (user_id,))["n"]
+        if owned:
+            raise ValidationFailed({field: f"owns {owned} unfinished deliverable(s); reassign them first"})
+    if deactivated or (ctx.changed("role") and role not in (ADMIN, PROJECT_MANAGER)):
+        managed = db.fetch_one("SELECT count(*) AS n FROM projects WHERE manager_id = %s"
+                               " AND status NOT IN ('completed', 'cancelled')", (user_id,))["n"]
+        if managed:
+            raise ValidationFailed({field: f"manages {managed} open project(s); assign another manager first"})
+    if deactivated or (ctx.changed("role") and role != TEAM_LEAD):
+        for team in db.fetch_all("UPDATE teams SET lead_id = NULL, updated_at = now() WHERE lead_id = %s"
+                                 " RETURNING id", (user_id,)):
+            audit.record(ctx.request, "update", "teams", team["id"], {"lead_id": {"from": user_id, "to": None}})
 
 
 def _users_before_delete(request: Request, record: dict) -> None:
@@ -267,7 +294,24 @@ def _projects_before_write(ctx: WriteContext) -> None:
     if ctx.existing is not None and (ctx.changed("start_date") or ctx.changed("end_date")):
         _check_deliverables_within(ctx.existing["id"], ctx.merged.get("start_date"), ctx.merged.get("end_date"))
     if ctx.changed("status"):
+        if values["status"] == "completed" and ctx.existing is not None:
+            open_count = db.fetch_one("SELECT count(*) AS n FROM deliverables WHERE project_id = %s"
+                                      " AND status <> 'completed'", (ctx.existing["id"],))["n"]
+            if open_count:
+                raise ValidationFailed({"status": f"cannot complete the project: {open_count} deliverable(s) "
+                                                  "are not completed yet"})
         values["completed_at"] = _now() if values["status"] == "completed" else None
+
+
+def _projects_before_delete(request: Request, record: dict) -> None:
+    """Deleting a project frees work in other projects that its deliverables were blocking."""
+    rows = db.fetch_all(
+        "SELECT DISTINCT l.target_id FROM deliverable_links l JOIN deliverables s ON s.id = l.source_id"
+        " JOIN deliverables t ON t.id = l.target_id WHERE l.type = 'blocks' AND s.project_id = %s"
+        " AND t.project_id <> %s", (record["id"], record["id"]))
+    db.execute("DELETE FROM deliverable_links WHERE source_id IN (SELECT id FROM deliverables WHERE project_id = %s)",
+               (record["id"],))
+    release_unblocked(request, [r["target_id"] for r in rows])
 
 
 def _resolve_project(raw: str) -> int:
@@ -284,6 +328,8 @@ LEFT JOIN LATERAL (
            count(*) FILTER (WHERE x.status = 'completed') AS completed,
            count(*) FILTER (WHERE x.status = 'blocked') AS blocked,
            count(*) FILTER (WHERE x.due_date < current_date AND x.status <> 'completed') AS overdue,
+           max(current_date - x.due_date) FILTER (WHERE x.due_date < current_date AND x.status <> 'completed')
+               AS max_overdue_days,
            CASE WHEN bool_and(COALESCE(x.estimated_hours, 0) > 0)
                 THEN sum(CASE WHEN x.status = 'completed' THEN 100 ELSE x.progress_pct END * x.estimated_hours)
                      / sum(x.estimated_hours)
@@ -291,7 +337,19 @@ LEFT JOIN LATERAL (
            END AS progress
       FROM deliverables x WHERE x.project_id = t.id
 ) s ON true
+LEFT JOIN LATERAL (SELECT sum(amount) AS spent FROM expenses WHERE project_id = t.id) e ON true
 """
+
+
+def _project_ids_with_health(levels: list[str], user: User) -> list[int]:
+    """Ids of the visible projects whose health is one of ``levels`` (health is computed in Python)."""
+    scope = project_visibility("t", user)
+    query = sql.SQL("SELECT {} FROM {}").format(sql.SQL(PROJECTS.select), sql.SQL(PROJECTS.source))
+    params: list = []
+    if scope is not None:
+        query += sql.SQL(" WHERE ({})").format(scope[0])
+        params = scope[1]
+    return [row["id"] for row in db.fetch_all(query, params) if health.computed_fields(row)["health"] in levels]
 
 PROJECTS = Resource(
     name="projects",
@@ -303,7 +361,8 @@ PROJECTS = Resource(
         " CASE t.visibility WHEN 'inherit' THEN NULL ELSE t.visibility END AS visibility_override,"
         " COALESCE(s.total, 0) AS deliverables_total, COALESCE(s.completed, 0) AS deliverables_completed,"
         " COALESCE(s.blocked, 0) AS deliverables_blocked, COALESCE(s.overdue, 0) AS deliverables_overdue,"
-        " COALESCE(round(s.progress), 0)::int AS progress_pct"
+        " COALESCE(round(s.progress), 0)::int AS progress_pct, COALESCE(s.max_overdue_days, 0) AS max_overdue_days,"
+        " COALESCE(e.spent, 0) AS budget_spent"
     ),
     source=("projects t JOIN departments d ON d.id = t.department_id JOIN users m ON m.id = t.manager_id"
             + _PROJECT_STATS),
@@ -313,6 +372,7 @@ PROJECTS = Resource(
         "department_id": Filter("t.department_id", "ref"),
         "manager_id": Filter("t.manager_id", "ref", me=True),
         "visibility": Filter("t.visibility", "enum", choices=VISIBILITIES),
+        "health": Filter("t.id", "enum", multi=True, choices=health.LEVELS, ids=_project_ids_with_health),
         "start_from": Filter("t.start_date", "date", op=">="),
         "start_to": Filter("t.start_date", "date", op="<="),
         "end_from": Filter("t.end_date", "date", op=">="),
@@ -324,9 +384,11 @@ PROJECTS = Resource(
            "progress_pct": "s.progress", "department": "d.name", "manager": "m.name",
            "updated_at": "t.updated_at"},
     default_sort="key",
-    hidden=("deliverable_seq",),
+    hidden=("deliverable_seq", "max_overdue_days"),
     before_write=_projects_before_write,
+    before_delete=_projects_before_delete,
     resolve=_resolve_project,
+    computed=health.computed_fields,
 )
 
 
@@ -394,8 +456,35 @@ def _open_blockers(deliverable_id: int) -> list[str]:
     return [r["key"] for r in rows]
 
 
+def _reconcile_progress(ctx: WriteContext) -> None:
+    """Keep status and progress telling the same story.
+
+    Progress on work that has not started starts it; lowering the progress of completed work reopens it;
+    moving work back to "not started" resets its progress.
+    """
+    values, merged = ctx.values, ctx.merged
+    status, progress = merged.get("status", "not_started"), merged.get("progress_pct", 0)
+    if status == "completed":
+        if "progress_pct" in values and "status" not in values and progress < 100 and ctx.existing is not None:
+            values["status"] = "in_progress"
+    elif status == "not_started":
+        if "progress_pct" in values and progress > 0:
+            values["status"] = "in_progress"
+        elif "status" in values and ctx.existing is not None:
+            values["progress_pct"] = 0
+
+
+def _require_open_project(project_id: int) -> None:
+    """New work cannot be added to a project that is finished or cancelled."""
+    row = db.fetch_one("SELECT status FROM projects WHERE id = %s", (project_id,))
+    if row["status"] in ("completed", "cancelled"):
+        raise ValidationFailed({"project_id": f"the project is {row['status']}; reopen it to add or move work here"})
+
+
 def _deliverables_before_write(ctx: WriteContext) -> None:
     values = ctx.values
+    if ctx.existing is None or ctx.changed("project_id"):
+        _require_open_project(ctx.merged["project_id"])
     if ctx.existing is None:
         values["number"] = _next_number(values["project_id"])
         values.setdefault("reporter_id", ctx.user["id"])
@@ -411,16 +500,72 @@ def _deliverables_before_write(ctx: WriteContext) -> None:
     if ctx.changed("owner_id") and values["owner_id"] is not None:
         _require_user(values["owner_id"], "owner_id", (ADMIN, PROJECT_MANAGER, TEAM_LEAD, TEAM_MEMBER),
                       "must be an active user who is not a viewer")
-    if ctx.existing is not None and ctx.changed("status") and values["status"] == "completed":
+    _reconcile_progress(ctx)
+    verbs = {"completed": "complete", "in_progress": "start"}
+    if ctx.existing is not None and ctx.changed("status") and values["status"] in verbs:
         blockers = _open_blockers(ctx.existing["id"])
         if blockers:
-            raise ValidationFailed({"status": f"cannot complete while blocked by {', '.join(blockers)}"})
+            raise ValidationFailed({"status": f"cannot {verbs[values['status']]} while blocked by "
+                                              f"{', '.join(blockers)}"})
     if ctx.existing is None or ctx.changed("status"):
         if ctx.merged.get("status") == "completed":
             values["progress_pct"] = 100
             values["completed_at"] = _now()
         elif ctx.existing is not None:
             values["completed_at"] = None
+
+_OPEN_BLOCKER = ("EXISTS (SELECT 1 FROM deliverable_links l JOIN deliverables s ON s.id = l.source_id"
+                 " WHERE l.type = 'blocks' AND l.target_id = d.id AND s.status <> 'completed')")
+
+
+def _move(request: Request, rows: list[dict], before: str) -> None:
+    for row in rows:
+        audit.record(request, "update", "deliverables", row["id"], {"status": {"from": before, "to": row["status"]}})
+
+
+def release_unblocked(request: Request, target_ids: list[int]) -> None:
+    """Move deliverables marked blocked back to work once nothing unfinished blocks them any more."""
+    query = sql.SQL(
+        "UPDATE deliverables d SET status = CASE WHEN d.progress_pct > 0 THEN 'in_progress' ELSE 'not_started' END,"
+        " updated_at = now() WHERE d.id = ANY(%s) AND d.status = 'blocked' AND NOT {open}"
+        " RETURNING d.id, d.status").format(open=sql.SQL(_OPEN_BLOCKER))
+    _move(request, db.fetch_all(query, (target_ids,)), "blocked")
+
+
+def block_waiting(request: Request, target_ids: list[int]) -> None:
+    """Mark deliverables that are waiting on unfinished work as blocked (finished work is left alone)."""
+    query = sql.SQL(
+        "UPDATE deliverables d SET status = 'blocked', updated_at = now()"
+        " WHERE d.id = ANY(%s) AND d.status IN ('not_started', 'in_progress') AND {open}"
+        " RETURNING d.id, d.status").format(open=sql.SQL(_OPEN_BLOCKER))
+    for row in db.fetch_all(query, (target_ids,)):
+        audit.record(request, "update", "deliverables", row["id"], {"status": {"from": "waiting", "to": "blocked"}})
+
+
+def _blocked_by(deliverable_id: int) -> list[int]:
+    """Ids of the deliverables that ``deliverable_id`` blocks."""
+    rows = db.fetch_all("SELECT target_id FROM deliverable_links WHERE type = 'blocks' AND source_id = %s",
+                        (deliverable_id,))
+    return [r["target_id"] for r in rows]
+
+
+def _deliverables_after_write(ctx: WriteContext, record_id: int) -> None:
+    """Dependents follow their blockers: finishing one releases the work it held up, reopening it blocks that
+    work again."""
+    if not ctx.changed("status"):
+        return
+    if ctx.values["status"] == "completed":
+        release_unblocked(ctx.request, _blocked_by(record_id))
+    elif ctx.existing["status"] == "completed":
+        block_waiting(ctx.request, _blocked_by(record_id))
+
+
+def _deliverables_before_delete(request: Request, record: dict) -> None:
+    """Deleting a blocker frees the work it was holding up (the links go with it)."""
+    targets = _blocked_by(record["id"])
+    db.execute("DELETE FROM deliverable_links WHERE source_id = %s", (record["id"],))
+    release_unblocked(request, targets)
+
 
 def resolve_deliverable(raw: str) -> int:
     """``ENG-12`` (case-insensitive) → deliverable id."""
@@ -478,6 +623,8 @@ DELIVERABLES = Resource(
            "updated_at": "t.updated_at"},
     default_sort="due_date",
     before_write=_deliverables_before_write,
+    after_write=_deliverables_after_write,
+    before_delete=_deliverables_before_delete,
     resolve=resolve_deliverable,
 )
 
@@ -610,7 +757,74 @@ LEAVES = Resource(
 )
 
 
-RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, TEAMS, PROJECTS, DELIVERABLES, LEAVES)
+# ---------------------------------------------------------------------------
+# Expenses
+# ---------------------------------------------------------------------------
+
+EXPENSE_FIELDS = {
+    "project_id": Field("ref", required=True, nullable=False, ref="projects"),
+    "amount": Field("decimal", required=True, nullable=False, minimum=Decimal("0.01"), maximum=Decimal("999999999999")),
+    "category": Field("string", required=True, nullable=False, max_len=50),
+    "spent_on": Field("date", required=True, nullable=False),
+    "description": Field("string", max_len=1000),
+}
+
+
+class ExpensePolicy(Policy):
+    """Everyone who can see a project reads its expenses; its manager and admins record them."""
+
+    def actions(self, user: User) -> frozenset[str]:
+        return ALL_ACTIONS if has_role(user, ADMIN, PROJECT_MANAGER) else frozenset({READ})
+
+    def scope(self, user: User) -> Scope:
+        return project_visibility("p", user)
+
+    def _manages(self, user: User, record: dict) -> bool:
+        return is_admin(user) or (has_role(user, PROJECT_MANAGER) and record["project_manager_id"] == user["id"])
+
+    def check_create(self, user: User, values: dict) -> None:
+        if not is_admin(user) and not _manages_project(user, values["project_id"]):
+            raise Forbidden("Only the project's manager can record expenses")
+
+    def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:
+        return frozenset(EXPENSE_FIELDS) - {"project_id"} if self._manages(user, record) else frozenset()
+
+    def can_delete(self, user: User, record: dict) -> bool:
+        return self._manages(user, record)
+
+
+def _expenses_before_write(ctx: WriteContext) -> None:
+    if ctx.existing is None:
+        ctx.values["created_by"] = ctx.user["id"]
+    if ctx.changed("category"):
+        categories = get_setting("budget.expense_categories")
+        if ctx.values["category"] not in categories:
+            raise ValidationFailed({"category": f"must be one of: {', '.join(categories)}"})
+
+
+EXPENSES = Resource(
+    name="expenses",
+    table="expenses",
+    fields=EXPENSE_FIELDS,
+    policy=ExpensePolicy(),
+    select=("t.*, p.key AS project_key, p.name AS project_name, p.manager_id AS project_manager_id,"
+            " u.name AS created_by_name"),
+    source="expenses t JOIN projects p ON p.id = t.project_id LEFT JOIN users u ON u.id = t.created_by",
+    filters={
+        "project_id": Filter("t.project_id", "ref"),
+        "category": Filter("t.category", "string", multi=True),
+        "from": Filter("t.spent_on", "date", op=">="),
+        "to": Filter("t.spent_on", "date", op="<="),
+    },
+    search=("t.description", "t.category", "p.key"),
+    sorts={"spent_on": "t.spent_on", "amount": "t.amount", "category": "t.category", "project": "p.key"},
+    default_sort="-spent_on",
+    hidden=("created_by",),
+    before_write=_expenses_before_write,
+)
+
+
+RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, TEAMS, PROJECTS, DELIVERABLES, LEAVES, EXPENSES)
 
 
 def capabilities(user: User) -> dict[str, list[str]]:

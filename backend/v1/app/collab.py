@@ -13,7 +13,7 @@ from app import audit, db
 from app.crud import fetch, record_id_from
 from app.http import Conflict, Forbidden, NotFound, Request, ValidationFailed, created, no_content, ok
 from app.rbac import PROJECT_MANAGER, VIEWER, has_role, is_admin
-from app.resources import DELIVERABLES, project_visibility
+from app.resources import DELIVERABLES, block_waiting, project_visibility, release_unblocked
 from app.validation import Field, parse_id, validate_fields
 
 
@@ -184,6 +184,8 @@ def add_link(request: Request) -> dict:
     )
     audit.record(request, "create", "deliverable_links", row["id"],
                  {"source": source["key"], "target": dest["key"], "type": stored})
+    if stored == "blocks":
+        block_waiting(request, [dest["id"]])  # a new, unfinished blocker puts the other item on hold
     link = next(x for x in _links_of(request.user, deliverable["id"]) if x["id"] == row["id"])
     return created(link)
 
@@ -200,5 +202,7 @@ def delete_link(request: Request) -> dict:
         raise NotFound("Link not found")
     db.execute("DELETE FROM deliverable_links WHERE id = %s", (link_id,))
     audit.record(request, "delete", "deliverable_links", link_id, {"before": row})
+    if row["type"] == "blocks":
+        release_unblocked(request, [row["target_id"]])
     return no_content()
 

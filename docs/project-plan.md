@@ -586,21 +586,56 @@ Every phase ends with:
 
 ✅ **Done when** adding a week of leave for a fully allocated person flags them over-allocated, and the report numbers match a hand calculation.
 
-### Phase 3 — Budget, dependencies, comments, health (Q2, Q6, Q7)
+### Phase 3 — Budget, project health, dependency graph (Q2, Q6, Q7)
 
-- Backend:
-  - `expenses` with `GET /reports/budget`.
-  - `deliverable_dependencies`: chain endpoint, cycle and same-project checks, completion blocked by upstream.
-  - `comments`.
-  - `services/health.py` with reasons; `health` filter on projects.
-- UI:
-  - Budget tab (planned vs spent, expenses list).
-  - Dependencies tab (list + upstream/downstream chain view).
-  - Comment thread on deliverables.
-  - Health chips with tooltip reasons.
-- Tests: table-driven health rules, cycle detection, budget totals.
+> **Design (reviewed against what Phases 1–2 already built).** Comments and deliverable links shipped in Phase 1, so Phase 3 adds three things, all computed on read from settings (nothing cached, no jobs):
+>
+> **1. Expenses and budget (Q7).** Migration 6 adds `expenses` (`project_id`, `amount > 0`, `category`, `spent_on`, `description`, `created_by`).
+> Categories come from the `budget.expense_categories` setting (admin-tunable, public via `/meta`). Policy: everyone reads (project visibility applies), the project's manager and admins write; the project cannot be changed after creation.
+> Projects gain `budget_spent`, `budget_burn_pct` and `schedule_elapsed_pct`. `GET /reports/budget?project_id&department_id` returns planned vs spent per project, totals, spend by category and by month, each project with its progress next to its burn (spending 80 % of the budget at 40 % progress is the signal).
+>
+> **2. Project health (Q2).** One pure function, `health.assess(metrics, today, rules)`, returns `green | amber | red` plus a list of `{level, code, message}` reasons; it applies to `active` and `on_hold` projects (others get `null`). Thresholds are the four `health.*` settings, so an admin retunes health without a redeploy.
+>
+> | Rule | Amber | Red |
+> |------|-------|-----|
+> | Overdue deliverables | any overdue | the longest is overdue by more than `health.red_overdue_days` |
+> | Blocked deliverables | any blocked | — |
+> | Schedule: elapsed % − progress % | > `health.amber_schedule_gap_pct` | > `health.red_schedule_gap_pct` |
+> | Budget | burn − progress > `health.amber_budget_gap_pct` | burn > 100 % |
+> | Dates | — | past the target end date |
+>
+> Each metric fires at most one reason (its highest tier). The list endpoint gets a `health` filter (`health=amber,red` answers "which projects are at risk?"). The filter is resolved by the same Python function, not a second SQL copy of the rules, through a small engine hook: a `Filter` may resolve to ids, and a `Resource` may add computed fields.
+>
+> **3. Dependency graph (Q6).** The links between deliverables already exist; Phase 3 adds `GET /projects/{id}/dependencies`: the project's deliverables plus the visible deliverables of other projects they are linked to, the `blocks` edges, each node's `depth` (longest chain of blockers before it), whether it is `ready` to start, and the `longest_chain`. The UI draws it as columns by depth, with the edges listed as text underneath for screen readers and phones.
+>
+> **UI.** Health chip (with reasons on hover) on the projects list and project page; a health filter; Project → **Budget** tab (planned, spent, remaining, burn vs progress, spend by category and month, expenses list with add/edit/delete); Project → **Dependencies** tab (graph); a **Budget** page across projects.
+>
+> **Tests.** Table-driven health rules, layering and cycle-safety of the graph, budget totals and permissions, hidden projects in the graph, the `health` filter, and the new screens.
 
-✅ **Done when** seeded data shows a red, an amber and a green project with correct reasons, and a dependency cycle is rejected with a clear message.
+✅ **Done when** seeded data shows a red, an amber and a green project with correct reasons, spending on a project moves its burn and health, and a blocking chain renders with its depths.
+
+> **Status: built, awaiting validation.** Migration 6; `health.py`, `budget.py`, `dependencies.py`; 269 backend and 101 frontend tests. Two choices worth knowing: a running project with no deliverables counts as 0 % complete (so it turns amber/red as its schedule passes), and projects without a planned budget have no burn figure (their spending is still shown).
+
+### State rules (consistency audit)
+
+Statuses are not free-form labels: the API keeps them consistent, whichever way they change.
+
+| Situation | Rule |
+|-----------|------|
+| A deliverable gets an unfinished blocker (link added, blocker reopened) | It becomes **blocked** (finished work is left alone) |
+| Its last unfinished blocker is completed, unlinked or deleted (also by deleting the blocker's project) | It is **released**: in progress if it has progress, else not started |
+| Starting or completing work that still has unfinished blockers | Refused, naming the blockers |
+| Progress on not-started work | Starts it |
+| Lowering progress of completed work | Reopens it (and re-blocks what waits on it) |
+| Moving work back to not started | Progress resets to 0 |
+| Completing a deliverable | Progress becomes 100 |
+| Adding or moving work into a completed or cancelled project | Refused; reopen the project first (expenses can still be filed) |
+| Completing a project | Refused while any deliverable is unfinished (cancelling is allowed) |
+| Deactivating a person, or making them a viewer | Refused while they own unfinished deliverables |
+| Deactivating or demoting someone who manages an open project | Refused until another manager is assigned |
+| A team lead stops being one | The team's lead is cleared (audited) |
+
+Known decisions left as they are: work blocked by a deliverable of a *cancelled* project stays blocked until someone unlinks it; 100% progress does not complete work by itself.
 
 ### Phase 4 — Admin console, dashboard & search
 

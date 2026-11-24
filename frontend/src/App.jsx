@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ApartmentOutlinedIcon from '@mui/icons-material/ApartmentOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import EventBusyOutlinedIcon from '@mui/icons-material/EventBusyOutlined';
@@ -24,6 +25,7 @@ const TeamsPage = lazy(() => import('./features/teams/TeamsPage'));
 const TeamDetailPage = lazy(() => import('./features/teams/TeamDetailPage'));
 const LeavePage = lazy(() => import('./features/leave/LeavePage'));
 const CapacityPage = lazy(() => import('./features/capacity/CapacityPage'));
+const BudgetPage = lazy(() => import('./features/budget/BudgetPage'));
 const MyWorkPage = lazy(() => import('./features/deliverables/MyWorkPage'));
 const UsersPage = lazy(() => import('./features/admin/UsersPage'));
 const DepartmentsPage = lazy(() => import('./features/admin/DepartmentsPage'));
@@ -38,6 +40,7 @@ const NAV = [
   { label: 'My work', to: '/my-work', icon: <AssignmentTurnedInOutlinedIcon />, visible: (can) => can('deliverables', 'update') },
   { label: 'Teams', to: '/teams', icon: <GroupsOutlinedIcon />, visible: () => true },
   { label: 'Capacity', to: '/capacity', icon: <InsightsOutlinedIcon />, visible: () => true },
+  { label: 'Budget', to: '/budget', icon: <AccountBalanceWalletOutlinedIcon />, visible: () => true },
   { label: 'Leave', to: '/leave', icon: <EventBusyOutlinedIcon />, visible: () => true },
   { label: 'Users', to: '/admin/users', icon: <PeopleAltOutlinedIcon />, visible: (can) => can('users', 'create') },
   { label: 'Departments', to: '/admin/departments', icon: <ApartmentOutlinedIcon />, visible: (can) => can('departments', 'create') },
@@ -65,6 +68,7 @@ export default function App() {
         <Route path="teams" element={<TeamsPage />} />
         <Route path="teams/:id" element={<TeamDetailPage />} />
         <Route path="capacity" element={<CapacityPage />} />
+        <Route path="budget" element={<BudgetPage />} />
         <Route path="leave" element={<LeavePage />} />
         <Route path="my-work" element={<MyWorkPage />} />
         <Route path="admin/users" element={<RequireAuth resource="users" action="create"><UsersPage /></RequireAuth>} />

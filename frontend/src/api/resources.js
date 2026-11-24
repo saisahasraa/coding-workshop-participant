@@ -22,6 +22,7 @@ export const projectsApi = resourceApi('projects');
 export const deliverablesApi = resourceApi('deliverables');
 export const teamsApi = resourceApi('teams');
 export const leavesApi = resourceApi('leaves');
+export const expensesApi = resourceApi('expenses');
 
 /**
  * Capacity report for a window.
@@ -34,3 +35,12 @@ export const fetchCapacity = (query, signal) => api.get('/reports/capacity', { q
 
 /** @returns {Promise<object>} enumerations and public settings */
 export const fetchMeta = (signal) => api.get('/meta', { signal });
+
+/**
+ * Planned vs spent, by project, category and month.
+ * @param {{project_id?: string, department_id?: string}} query
+ */
+export const fetchBudget = (query, signal) => api.get('/reports/budget', { query, signal });
+
+/** Blocking graph of a project. @param {string} ref project key or id */
+export const fetchDependencies = (ref, signal) => api.get(`/projects/${encodeURIComponent(ref)}/dependencies`, { signal });

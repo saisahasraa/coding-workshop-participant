@@ -11,6 +11,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { projectsApi } from '../../api/resources';
 import { useAuth } from '../../auth/AuthContext';
 import FormDialog from '../../components/FormDialog';
+import HealthChip from '../../components/HealthChip';
 import { useNotify } from '../../components/NotificationProvider';
 import PageHeader from '../../components/PageHeader';
 import ProgressCell from '../../components/ProgressCell';
@@ -22,17 +23,20 @@ import useListQuery from '../../hooks/useListQuery';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import { formatDate, labelize } from '../../utils/format';
+import UtilizationBar from '../capacity/UtilizationBar';
 import projectFields from './projectFields';
 
 const COLUMNS = [
   { field: 'key', headerName: 'Key', width: 100 },
   { field: 'name', headerName: 'Name', flex: 1, minWidth: 180 },
   { field: 'status', headerName: 'Status', width: 130, renderCell: ({ value }) => <StatusChip value={value} /> },
+  { field: 'health', headerName: 'Health', width: 120, sortable: false, renderCell: ({ row }) => <HealthChip level={row.health} reasons={row.health_reasons} /> },
   { field: 'priority', headerName: 'Priority', width: 110, renderCell: ({ value }) => <StatusChip value={value} /> },
   { field: 'department', headerName: 'Department', width: 140, valueGetter: (_v, row) => row.department_name },
   { field: 'manager', headerName: 'Manager', width: 150, valueGetter: (_v, row) => row.manager_name },
   { field: 'end_date', headerName: 'Target end', width: 130, valueFormatter: (value) => formatDate(value) },
   { field: 'progress_pct', headerName: 'Progress', width: 150, renderCell: ({ value }) => <ProgressCell value={value} /> },
+  { field: 'budget_burn_pct', headerName: 'Budget spent', width: 150, sortable: false, renderCell: ({ row }) => <UtilizationBar value={row.budget_burn_pct} over={row.budget_burn_pct > 100} unit="of budget spent" /> },
 ];
 
 /** Project list with search, filters and creation. */
@@ -41,7 +45,7 @@ export default function ProjectsPage() {
   const notify = useNotify();
   const { can, user } = useAuth();
   const { meta } = useMeta();
-  const list = useListQuery({ sort: 'key', filters: ['status', 'manager_id'] });
+  const list = useListQuery({ sort: 'key', filters: ['status', 'health', 'manager_id'] });
   const [creating, setCreating] = useState(false);
   const lookups = useLookups(['departments', 'managers'], creating);
 
@@ -71,6 +75,14 @@ export default function ProjectsPage() {
           <MenuItem value="">All statuses</MenuItem>
           {(meta?.project_statuses || []).map((s) => <MenuItem key={s} value={s}>{labelize(s)}</MenuItem>)}
         </TextField>
+        <TextField select label="Health" value={list.values.health} onChange={(e) => list.setFilter('health', e.target.value)}
+          sx={{ minWidth: 190 }} fullWidth={false}>
+          <MenuItem value="">Any health</MenuItem>
+          <MenuItem value="amber,red">At risk or off track</MenuItem>
+          <MenuItem value="green">On track</MenuItem>
+          <MenuItem value="amber">At risk</MenuItem>
+          <MenuItem value="red">Off track</MenuItem>
+        </TextField>
         {can('projects', 'create') && (
           <FormControlLabel
             control={<Switch checked={list.values.manager_id === 'me'} onChange={(e) => list.setFilter('manager_id', e.target.checked ? 'me' : '')} />}
@@ -96,7 +108,7 @@ export default function ProjectsPage() {
           <Stack spacing={1}>
             <Stack direction="row" justifyContent="space-between" spacing={1}>
               <Typography fontWeight={600}>{row.key} · {row.name}</Typography>
-              <StatusChip value={row.status} />
+              <Stack direction="row" spacing={0.5}><StatusChip value={row.status} /><HealthChip level={row.health} reasons={row.health_reasons} /></Stack>
             </Stack>
             <Typography variant="body2" color="text.secondary">
               {row.manager_name} · {row.department_name}{row.end_date && ` · due ${formatDate(row.end_date)}`}

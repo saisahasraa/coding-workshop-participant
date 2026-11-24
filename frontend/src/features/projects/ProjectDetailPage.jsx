@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Breadcrumbs from '@mui/material/Breadcrumbs';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
@@ -18,6 +19,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { projectsApi } from '../../api/resources';
 import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import HealthChip from '../../components/HealthChip';
 import FormDialog from '../../components/FormDialog';
 import { useNotify } from '../../components/NotificationProvider';
 import PageHeader from '../../components/PageHeader';
@@ -27,7 +29,11 @@ import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import DeliverablesView from '../deliverables/DeliverablesView';
+import UtilizationBar from '../capacity/UtilizationBar';
+import BudgetTab from './BudgetTab';
+import DependenciesTab from './DependenciesTab';
 import TeamTab from './TeamTab';
+import { HEALTH } from '../../utils/health';
 import { formatDate, formatMoney, labelize } from '../../utils/format';
 import projectFields from './projectFields';
 
@@ -46,6 +52,16 @@ function Overview({ project, currency }) {
   const visibility = project.visibility === 'inherit' ? 'Organization default' : labelize(project.visibility);
   return (
     <Grid container spacing={2}>
+      {project.health && (
+        <Grid size={12}>
+          <Alert severity={HEALTH[project.health].severity}>
+            <AlertTitle>{HEALTH[project.health].label}</AlertTitle>
+            {project.health_reasons.length === 0
+              ? 'Schedule, budget and deliverables are all within their limits.'
+              : <Stack component="ul" sx={{ m: 0, pl: 2 }}>{project.health_reasons.map((r) => <li key={r.code}>{r.message}</li>)}</Stack>}
+          </Alert>
+        </Grid>
+      )}
       <Grid size={{ xs: 12, md: 4 }}>
         <Card sx={{ height: '100%' }}><CardContent>
           <Typography variant="h3" gutterBottom>Progress</Typography>
@@ -67,8 +83,11 @@ function Overview({ project, currency }) {
       <Grid size={{ xs: 12, sm: 6, md: 4 }}>
         <Card sx={{ height: '100%' }}><CardContent>
           <Typography variant="h3" gutterBottom>Budget</Typography>
-          <Fact label="Planned">{formatMoney(project.planned_budget, currency)}</Fact>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Spend tracking arrives with expenses.</Typography>
+          <Stack direction="row" spacing={3} sx={{ mb: 1 }}>
+            <Fact label="Planned">{formatMoney(project.planned_budget, currency)}</Fact>
+            <Fact label="Spent">{formatMoney(Number(project.budget_spent), currency)}</Fact>
+          </Stack>
+          <UtilizationBar value={project.budget_burn_pct} over={project.budget_burn_pct > 100} unit="of budget spent" />
         </CardContent></Card>
       </Grid>
       <Grid size={12}>
@@ -127,7 +146,7 @@ export default function ProjectDetailPage() {
       </Breadcrumbs>
       <PageHeader
         title={`${project.key} · ${project.name}`}
-        subtitle={<Stack direction="row" spacing={1} component="span" sx={{ mt: 0.5 }}><StatusChip value={project.status} /><StatusChip value={project.priority} /></Stack>}
+        subtitle={<Stack direction="row" spacing={1} component="span" sx={{ mt: 0.5 }}><StatusChip value={project.status} /><StatusChip value={project.priority} /><HealthChip level={project.health} reasons={project.health_reasons} /></Stack>}
         actions={(
           <>
             {project.permissions.update && <Button startIcon={<EditOutlinedIcon />} variant="outlined" onClick={() => setEditing(true)}>Edit</Button>}
@@ -140,9 +159,13 @@ export default function ProjectDetailPage() {
         <Tab value="overview" label="Overview" />
         <Tab value="deliverables" label={`Deliverables (${project.deliverables_total})`} />
         <Tab value="team" label="Team" />
+        <Tab value="budget" label="Budget" />
+        <Tab value="dependencies" label="Dependencies" />
       </Tabs>
       {tab === 'overview' && <Overview project={project} currency={currency} />}
       {tab === 'team' && <TeamTab project={project} />}
+      {tab === 'budget' && <BudgetTab project={project} onChange={reload} />}
+      {tab === 'dependencies' && <DependenciesTab project={project} />}
       {tab === 'deliverables' && (
         <DeliverablesView
           baseQuery={deliverableQuery}

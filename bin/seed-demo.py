@@ -113,7 +113,23 @@ LINKS = [
     ("WEB-2", "blocks", "WEB-3"),
     ("PAY-1", "blocks", "PAY-2"),
     ("PAY-2", "blocks", "PAY-4"),
+    ("WEB-3", "blocks", "WEB-4"),
     ("WEB-2", "relates_to", "PAY-4"),
+]
+
+# (project key, amount, category, days ago, description) - spend that leaves WEB amber, PAY red and ERP green
+EXPENSES = [
+    ("WEB", 30000, "labor", 50, "Design contractors, phase 1"),
+    ("WEB", 25000, "labor", 25, "Design contractors, phase 2"),
+    ("WEB", 12000, "software", 40, "CMS licences"),
+    ("WEB", 13000, "services", 10, "Copywriting agency"),
+    ("PAY", 220000, "labor", 70, "Engineering contractors"),
+    ("PAY", 120000, "labor", 30, "Engineering contractors"),
+    ("PAY", 45000, "software", 45, "Fraud-scoring vendor licence"),
+    ("PAY", 20000, "services", 12, "PCI assessor"),
+    ("ERP", 18000, "labor", 15, "Analyst contractors"),
+    ("ERP", 4000, "software", 20, "Reporting licences"),
+    ("DWH", 76000, "labor", 150, "Migration team"),
 ]
 
 # (deliverable key, author email, text)
@@ -213,6 +229,24 @@ def seed_collaboration(api: Api) -> None:
     print(f"Collaboration: {len(LINKS)} links, {added} new comments")
 
 
+def seed_budget(api: Api) -> None:
+    """Record demo expenses on projects that have none yet (safe to re-run)."""
+    added = 0
+    for code in dict.fromkeys(e[0] for e in EXPENSES):
+        _, project = api.request("GET", f"/projects/{code}")
+        _, existing = api.request("GET", "/expenses", query=f"?project_id={project['id']}&limit=1")
+        if existing["total"]:
+            continue
+        for _, amount, category, ago, description in (e for e in EXPENSES if e[0] == code):
+            status, body = api.request("POST", "/expenses", {
+                "project_id": project["id"], "amount": amount, "category": category, "spent_on": _days(-ago),
+                "description": description})
+            if status != 201:
+                sys.exit(f"Expense for {code} failed ({status}): {body}")
+            added += 1
+    print(f"Budget: {added} new expenses")
+
+
 def main() -> None:
     """Seed departments, users, projects and deliverables."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -253,6 +287,7 @@ def main() -> None:
 
     seed_collaboration(api)
     seed_capacity(api, departments, users)
+    seed_budget(api)
 
     print(f"\nDemo users (password: {DEMO_PASSWORD}):")
     for user in USERS:

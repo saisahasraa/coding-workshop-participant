@@ -21,23 +21,13 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { fetchCapacity } from '../../api/resources';
 import PageHeader from '../../components/PageHeader';
+import StatTile from '../../components/StatTile';
 import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { formatDate } from '../../utils/format';
 import UtilizationBar from './UtilizationBar';
 
 const FILTERS = ['from', 'to', 'team_id', 'department_id'];
-
-function Tile({ label, value, tone }) {
-  return (
-    <Card><CardContent>
-      <Typography variant="body2" color="text.secondary">{label}</Typography>
-      <Typography variant="h2" component="p" color={tone}>{value}</Typography>
-    </CardContent></Card>
-  );
-}
-
-Tile.propTypes = { label: PropTypes.string.isRequired, value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired, tone: PropTypes.string };
 
 function Status({ row }) {
   if (row.over_allocated) return <Chip size="small" color="error" label="Over-allocated" />;
@@ -116,10 +106,10 @@ export default function CapacityPage() {
 
       {summary && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid size={{ xs: 6, md: 3 }}><Tile label="People" value={summary.people} /></Grid>
-          <Grid size={{ xs: 6, md: 3 }}><Tile label="Available hours" value={summary.available_hours} /></Grid>
-          <Grid size={{ xs: 6, md: 3 }}><Tile label="Allocated hours" value={summary.allocated_hours} /></Grid>
-          <Grid size={{ xs: 6, md: 3 }}><Tile label="Over-allocated" value={summary.over_allocated} tone={summary.over_allocated ? 'error' : undefined} /></Grid>
+          <Grid size={{ xs: 6, md: 3 }}><StatTile label="People" value={summary.people} /></Grid>
+          <Grid size={{ xs: 6, md: 3 }}><StatTile label="Available hours" value={summary.available_hours} /></Grid>
+          <Grid size={{ xs: 6, md: 3 }}><StatTile label="Allocated hours" value={summary.allocated_hours} /></Grid>
+          <Grid size={{ xs: 6, md: 3 }}><StatTile label="Over-allocated" value={summary.over_allocated} tone={summary.over_allocated ? 'error' : undefined} /></Grid>
         </Grid>
       )}
 

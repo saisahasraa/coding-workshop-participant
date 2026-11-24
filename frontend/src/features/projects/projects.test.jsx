@@ -41,6 +41,20 @@ describe('Projects list', () => {
     await waitFor(() => expect(queries.at(-1)).toMatchObject({ manager_id: 'me', q: 'web' }));
   });
 
+  it('shows each project\'s health and filters on it', async () => {
+    const queries = [];
+    server.use(...sessionHandlers('viewer'), http.get(apiUrl('/projects'), ({ request }) => {
+      queries.push(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json(page([PROJECT]));
+    }));
+    renderWithApp(routes(), { route: '/projects' });
+    expect(await screen.findByText('At risk')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: '70% of budget spent' })).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Health'));
+    await userEvent.click(await screen.findByRole('option', { name: 'At risk or off track' }));
+    await waitFor(() => expect(queries.at(-1)).toMatchObject({ health: 'amber,red' }));
+  });
+
   it('creates a project and opens it', async () => {
     let created;
     server.use(

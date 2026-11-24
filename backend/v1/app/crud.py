@@ -31,6 +31,7 @@ class Filter:
     choices: tuple = ()
     me: bool = False  # the value "me" means the current user's id
     predicate: str | None = None  # boolean filter: condition applied for true, negated for false
+    ids: Callable[[list, dict], list[int]] | None = None  # computed filter: (values, user) -> matching ids
 
 
 @dataclass
@@ -74,6 +75,8 @@ class Resource:  # pylint: disable=too-many-instance-attributes
     before_write: Callable[[WriteContext], None] | None = None
     before_delete: Callable[[Request, dict], None] | None = None
     resolve: Callable[[str], int] | None = None  # maps a path segment (e.g. a key like ENG-12) to an id
+    after_write: Callable[[WriteContext, int], None] | None = None  # runs after an update is saved
+    computed: Callable[[dict], dict] | None = None  # derives extra fields from a row for the API shape
 
     @property
     def from_sql(self) -> sql.Composable:
@@ -96,6 +99,9 @@ def _filter_condition(spec: Filter, name: str, raw: str, user: dict) -> tuple[sq
         condition = sql.SQL(spec.predicate)
         return (condition if wanted else sql.SQL("NOT ({})").format(condition)), []
     values = [v.strip() for v in raw.split(",")] if spec.multi else [raw]
+    if spec.ids is not None:
+        wanted = [coerce(Field(spec.kind, choices=spec.choices, nullable=False), v) for v in values]
+        return sql.SQL("{} = ANY(%s)").format(column), [spec.ids(wanted, user)]
     parsed = []
     for value in values:
         if spec.me and value == "me":
@@ -189,6 +195,8 @@ def _where(resource: Resource, user: dict, query: dict) -> tuple[sql.Composable,
 def represent(resource: Resource, user: dict, row: dict) -> dict:
     """Public shape of a row: hidden columns removed, per-record permissions added."""
     body = {k: v for k, v in row.items() if k not in resource.hidden}
+    if resource.computed:
+        body.update(resource.computed(row))
     body["permissions"] = resource.policy.record_permissions(user, row)
     return body
 
@@ -307,6 +315,8 @@ def update_record(resource: Resource, request: Request) -> dict:
     if changes:
         _write(resource, {k: ctx.values[k] for k in changes}, record_id)
         audit.record(request, "update", resource.table, record_id, changes)
+        if resource.after_write:
+            resource.after_write(ctx, record_id)
     return ok(represent(resource, user, fetch(resource, user, record_id)))
 
 
