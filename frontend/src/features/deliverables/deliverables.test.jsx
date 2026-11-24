@@ -44,10 +44,14 @@ describe('My work', () => {
       return HttpResponse.json(page([]));
     }));
     renderWithApp(<MyWorkPage />, { route: '/my-work' });
-    expect(await screen.findByText('No deliverables yet.')).toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText('Due'));
-    await userEvent.click(await screen.findByRole('option', { name: 'Overdue' }));
+    expect(await screen.findByText('No deliverables match.')).toBeInTheDocument();
+    const overdue = screen.getByRole('button', { name: 'Overdue' });
+    await userEvent.click(overdue);
     await waitFor(() => expect(queries.at(-1)).toMatchObject({ overdue: 'true', owner_id: 'me' }));
+    expect(overdue).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Mine' })).not.toBeInTheDocument();   // already only mine
+    await userEvent.click(overdue);                                                     // a second click clears it
+    await waitFor(() => expect(queries.at(-1).overdue).toBeUndefined());
   });
 
   it('shows cards with actions on mobile', async () => {

@@ -36,7 +36,12 @@ export default function ResponsiveList({
     return (
       <Box>
         {loading && <LinearProgress aria-label="Loading" sx={{ mb: 1 }} />}
-        {!loading && !rows.length && <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>{emptyText}</Typography>}
+        {!loading && !rows.length && <Typography
+          sx={{
+            color: "text.secondary",
+            py: 4,
+            textAlign: 'center'
+          }}>{emptyText}</Typography>}
         <Stack spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
           {rows.map((row) => (
             <Card key={row.id} component="li">

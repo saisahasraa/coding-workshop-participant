@@ -49,7 +49,9 @@ export default function DependencyGraph({ nodes, edges }) {
               borderRadius: 1, overflow: 'hidden', opacity: n.status === 'completed' ? 0.7 : 1,
             }}
           >
-            <Link component={RouterLink} to={`/deliverables/${n.key}`} underline="hover" fontWeight={600} variant="body2">{n.key}</Link>
+            <Link component={RouterLink} to={`/deliverables/${n.key}`} underline="hover" variant="body2" sx={{
+              fontWeight: 600
+            }}>{n.key}</Link>
             <Typography variant="body2" noWrap title={n.name}>{n.name}</Typography>
             <StatusChip value={n.status} />
           </Box>

@@ -256,3 +256,8 @@ tfplan
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
+
+# UI review screenshots and Playwright output
+frontend/screenshots/
+frontend/test-results/
+frontend/playwright-report/

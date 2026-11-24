@@ -40,7 +40,9 @@ import projectFields from './projectFields';
 function Fact({ label, children }) {
   return (
     <div>
-      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Typography variant="body2" sx={{
+        color: "text.secondary"
+      }}>{label}</Typography>
       <Typography component="div">{children || '—'}</Typography>
     </div>
   );
@@ -66,7 +68,12 @@ function Overview({ project, currency }) {
         <Card sx={{ height: '100%' }}><CardContent>
           <Typography variant="h3" gutterBottom>Progress</Typography>
           <ProgressCell value={project.progress_pct} />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             {project.deliverables_completed} of {project.deliverables_total} deliverables completed
           </Typography>
         </CardContent></Card>
@@ -75,8 +82,12 @@ function Overview({ project, currency }) {
         <Card sx={{ height: '100%' }}><CardContent>
           <Typography variant="h3" gutterBottom>Delivery</Typography>
           <Stack direction="row" spacing={3}>
-            <Fact label="Overdue"><Typography color={project.deliverables_overdue ? 'error' : 'inherit'} fontWeight={600}>{project.deliverables_overdue}</Typography></Fact>
-            <Fact label="Blocked"><Typography color={project.deliverables_blocked ? 'error' : 'inherit'} fontWeight={600}>{project.deliverables_blocked}</Typography></Fact>
+            <Fact label="Overdue"><Typography color={project.deliverables_overdue ? 'error' : 'inherit'} sx={{
+              fontWeight: 600
+            }}>{project.deliverables_overdue}</Typography></Fact>
+            <Fact label="Blocked"><Typography color={project.deliverables_blocked ? 'error' : 'inherit'} sx={{
+              fontWeight: 600
+            }}>{project.deliverables_blocked}</Typography></Fact>
           </Stack>
         </CardContent></Card>
       </Grid>
@@ -142,7 +153,9 @@ export default function ProjectDetailPage() {
     <>
       <Breadcrumbs sx={{ mb: 1 }}>
         <Link component={RouterLink} to="/projects" underline="hover">Projects</Link>
-        <Typography color="text.primary">{project.key}</Typography>
+        <Typography sx={{
+          color: "text.primary"
+        }}>{project.key}</Typography>
       </Breadcrumbs>
       <PageHeader
         title={`${project.key} · ${project.name}`}

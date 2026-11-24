@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from psycopg import sql
 
-from app import audit, db, health
+from app import audit, db, health, notify
 from app.auth import check_password_policy
 from app.config import get_setting
 from app.crud import Filter, Resource, WriteContext
@@ -21,6 +21,7 @@ from app.passwords import hash_password
 from app.rbac import (
     ADMIN,
     ALL_ACTIONS,
+    CREATE,
     PROJECT_MANAGER,
     READ,
     ROLES,
@@ -40,6 +41,7 @@ PROJECT_STATUSES = ("planning", "active", "on_hold", "completed", "cancelled")
 DELIVERABLE_STATUSES = ("not_started", "in_progress", "blocked", "completed")
 PRIORITIES = ("low", "medium", "high", "critical")
 VISIBILITIES = ("inherit", "everyone", "members")
+ACCESS_LEVELS = ("inherit", "members", "everyone")  # who may edit / comment in a project
 
 PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{2,5}$")
 DELIVERABLE_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z0-9]{2,5})-([0-9]{1,9})$")
@@ -59,15 +61,43 @@ def _now() -> datetime:
 
 def project_visibility(alias: str, user: User) -> Scope:
     """Rows of project ``alias`` the user may see. Admins and project managers see all projects; others see
-    projects visible to everyone, plus projects they are a member of (they manage it or own a deliverable in it)."""
+    projects visible to everyone, plus projects they are a member of (they manage it, or are assignee or
+    reporter of a deliverable in it)."""
     if has_role(user, ADMIN, PROJECT_MANAGER):
         return None
     condition = sql.SQL(
         "(CASE {a}.visibility WHEN 'inherit' THEN %s ELSE {a}.visibility END) = 'everyone'"
         " OR {a}.manager_id = %s"
-        " OR EXISTS (SELECT 1 FROM deliverables vd WHERE vd.project_id = {a}.id AND vd.owner_id = %s)"
+        " OR EXISTS (SELECT 1 FROM deliverables vd WHERE vd.project_id = {a}.id"
+        "            AND (vd.owner_id = %s OR vd.reporter_id = %s))"
     ).format(a=sql.Identifier(alias))
-    return condition, [get_setting("projects.default_visibility"), user["id"], user["id"]]
+    return condition, [get_setting("projects.default_visibility"), user["id"], user["id"], user["id"]]
+
+
+def member_project_ids(user: User) -> set[int]:
+    """Projects the user is a member of: they manage it, or are assignee or reporter of a deliverable in it.
+
+    Looked up once per request and kept on the user under a private key.
+    """
+    if "_member_projects" not in user:
+        rows = db.fetch_all(
+            "SELECT id FROM projects WHERE manager_id = %(u)s UNION"
+            " SELECT project_id FROM deliverables WHERE owner_id = %(u)s OR reporter_id = %(u)s", {"u": user["id"]})
+        user["_member_projects"] = {r["id"] for r in rows}
+    return user["_member_projects"]
+
+
+def can_contribute(user: User, project_id: int, access: str, default_key: str) -> bool:
+    """Whether the user may contribute to a project under its access switch (``inherit`` uses the setting).
+
+    Viewers never may; admins always may; "everyone" means every other role; "members" means project members.
+    """
+    if has_role(user, VIEWER):
+        return False
+    if is_admin(user):
+        return True
+    effective = get_setting(default_key) if access == "inherit" else access
+    return effective == "everyone" or project_id in member_project_ids(user)
 
 
 def _date_order(ctx: WriteContext, start: str, end: str) -> None:
@@ -96,6 +126,7 @@ def _users_before_write(ctx: WriteContext) -> None:
     if "password" in values:
         check_password_policy(values["password"])
         values["password_hash"] = hash_password(values.pop("password"))
+        values.update(failed_logins=0, locked_until=None)  # a new password also lifts a sign-in lock
     if existing is None:
         values.setdefault("weekly_capacity_hours", Decimal(get_setting("capacity.default_weekly_hours")))
         return
@@ -186,7 +217,7 @@ USERS = Resource(
     sorts={"name": "t.name", "email": "t.email", "role": "t.role", "created_at": "t.created_at",
            "last_login_at": "t.last_login_at", "team": "tm.name"},
     default_sort="name",
-    hidden=("password_hash", "token_version"),
+    hidden=("password_hash", "token_version", "failed_logins", "locked_until"),
     before_write=_users_before_write,
     before_delete=_users_before_delete,
 )
@@ -234,6 +265,8 @@ PROJECT_FIELDS = {
     "end_date": Field("date"),
     "planned_budget": Field("decimal", nullable=False, minimum=Decimal(0), maximum=Decimal("999999999999")),
     "visibility": Field("enum", nullable=False, choices=VISIBILITIES),
+    "edit_access": Field("enum", nullable=False, choices=ACCESS_LEVELS),
+    "comment_access": Field("enum", nullable=False, choices=ACCESS_LEVELS),
 }
 
 
@@ -301,6 +334,20 @@ def _projects_before_write(ctx: WriteContext) -> None:
                 raise ValidationFailed({"status": f"cannot complete the project: {open_count} deliverable(s) "
                                                   "are not completed yet"})
         values["completed_at"] = _now() if values["status"] == "completed" else None
+
+
+def _projects_after_write(ctx: WriteContext, record_id: int) -> None:
+    """Tell a new manager about their project, and the people working on it when its status changes."""
+    project = db.fetch_one("SELECT key, name, manager_id FROM projects WHERE id = %s", (record_id,))
+    title = f"project {project['key']} \u201c{project['name']}\u201d"
+    link, actor = f"/projects/{project['key']}", ctx.user["name"]
+    if ctx.existing is None or ctx.changed("manager_id"):
+        notify.push(ctx.request, [project["manager_id"]], "assigned", f"{actor} made you the manager of {title}", link)
+    if ctx.existing is not None and ctx.changed("status"):
+        people = db.fetch_all("SELECT DISTINCT owner_id FROM deliverables WHERE project_id = %s"
+                              " AND status <> 'completed' AND owner_id IS NOT NULL", (record_id,))
+        notify.push(ctx.request, {project["manager_id"], *(p["owner_id"] for p in people)}, "status",
+                    f"{actor} moved {title} to {_label(ctx.values['status'])}", link)
 
 
 def _projects_before_delete(request: Request, record: dict) -> None:
@@ -391,6 +438,7 @@ PROJECTS = Resource(
     default_sort="key",
     hidden=("deliverable_seq", "max_overdue_days"),
     before_write=_projects_before_write,
+    after_write=_projects_after_write,
     before_delete=_projects_before_delete,
     resolve=_resolve_project,
     computed=health.computed_fields,
@@ -401,31 +449,36 @@ PROJECTS = Resource(
 # Deliverables
 # ---------------------------------------------------------------------------
 
-OWNER_EDITABLE = frozenset({"status", "progress_pct"})
-
-
 class DeliverablePolicy(Policy):
-    """Admins: everything. A project's manager: everything in it. Owners: status and progress."""
+    """Admins and a project's manager: everything. Contributors (per the project's edit access), and always
+    the assignee and reporter of a deliverable: add and edit, but not delete or move to another project."""
 
     def actions(self, user: User) -> frozenset[str]:
         if has_role(user, ADMIN, PROJECT_MANAGER):
             return ALL_ACTIONS
         if has_role(user, TEAM_LEAD, TEAM_MEMBER):
-            return frozenset({READ, UPDATE})
+            return frozenset({READ, CREATE, UPDATE})
         return frozenset({READ})
 
     def scope(self, user: User) -> Scope:
         return project_visibility("p", user)
 
     def check_create(self, user: User, values: dict) -> None:
-        if not is_admin(user) and not _manages_project(user, values["project_id"]):
-            raise Forbidden("Only the project's manager can add deliverables")
+        project = db.fetch_one("SELECT manager_id, edit_access FROM projects WHERE id = %s", (values["project_id"],))
+        if is_admin(user) or project["manager_id"] == user["id"]:
+            return
+        if not can_contribute(user, values["project_id"], project["edit_access"], "projects.default_edit_access"):
+            raise Forbidden("Only members of this project can add deliverables to it")
 
     def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:
         if is_admin(user) or (has_role(user, PROJECT_MANAGER) and record["project_manager_id"] == user["id"]):
             return None
-        if not has_role(user, VIEWER) and record["owner_id"] == user["id"]:
-            return OWNER_EDITABLE
+        if has_role(user, VIEWER):
+            return frozenset()
+        involved = user["id"] in (record["owner_id"], record["reporter_id"])
+        if involved or can_contribute(user, record["project_id"], record["project_edit_access"],
+                                      "projects.default_edit_access"):
+            return CONTRIBUTOR_EDITABLE
         return frozenset()
 
     def can_delete(self, user: User, record: dict) -> bool:
@@ -523,9 +576,27 @@ _OPEN_BLOCKER = ("EXISTS (SELECT 1 FROM deliverable_links l JOIN deliverables s 
                  " WHERE l.type = 'blocks' AND l.target_id = d.id AND s.status <> 'completed')")
 
 
+def _label(value: str) -> str:
+    return value.replace("_", " ")
+
+
+def deliverable_ref(deliverable_id: int) -> dict:
+    """Key, name and the people involved in a deliverable (assignee, reporter, project manager)."""
+    row = db.fetch_one(
+        "SELECT p.key || '-' || d.number AS key, d.name, d.owner_id, d.reporter_id, p.manager_id, d.project_id"
+        " FROM deliverables d JOIN projects p ON p.id = d.project_id WHERE d.id = %s", (deliverable_id,))
+    return {**row, "audience": {row["owner_id"], row["reporter_id"], row["manager_id"]},
+            "title": f"{row['key']} \u201c{row['name']}\u201d", "link": f"/deliverables/{row['key']}"}
+
+
 def _move(request: Request, rows: list[dict], before: str) -> None:
+    """Record, and tell the people doing the work about, a status change the system made by itself."""
     for row in rows:
         audit.record(request, "update", "deliverables", row["id"], {"status": {"from": before, "to": row["status"]}})
+        ref = deliverable_ref(row["id"])
+        why = "what blocked it is done" if before == "blocked" else "something it depends on is not finished"
+        notify.push(request, {ref["owner_id"], ref["reporter_id"]}, "status",
+                    f"{ref['title']} is now {_label(row['status'])}: {why}", ref["link"])
 
 
 def release_unblocked(request: Request, target_ids: list[int]) -> None:
@@ -543,8 +614,7 @@ def block_waiting(request: Request, target_ids: list[int]) -> None:
         "UPDATE deliverables d SET status = 'blocked', updated_at = now()"
         " WHERE d.id = ANY(%s) AND d.status IN ('not_started', 'in_progress') AND {open}"
         " RETURNING d.id, d.status").format(open=sql.SQL(_OPEN_BLOCKER))
-    for row in db.fetch_all(query, (target_ids,)):
-        audit.record(request, "update", "deliverables", row["id"], {"status": {"from": "waiting", "to": "blocked"}})
+    _move(request, db.fetch_all(query, (target_ids,)), "waiting")
 
 
 def _blocked_by(deliverable_id: int) -> list[int]:
@@ -554,15 +624,41 @@ def _blocked_by(deliverable_id: int) -> list[int]:
     return [r["target_id"] for r in rows]
 
 
+QUIET_FIELDS = {"status", "owner_id", "progress_pct"}  # reported separately, or too chatty to report
+
+
+def _notify_deliverable_change(ctx: WriteContext, record_id: int) -> None:
+    """Tell the assignee, reporter and project manager what changed (never the person who did it)."""
+    ref, actor, existing = deliverable_ref(record_id), ctx.user["name"], ctx.existing
+    if existing is None:
+        notify.push(ctx.request, [ref["owner_id"]], "assigned", f"{actor} assigned you {ref['title']}", ref["link"])
+        notify.push(ctx.request, ref["audience"] - {ref["owner_id"]}, "created", f"{actor} added {ref['title']}",
+                    ref["link"])
+        return
+    everyone = set(ref["audience"])
+    if ctx.changed("owner_id"):
+        notify.push(ctx.request, [ref["owner_id"]], "assigned", f"{actor} assigned you {ref['title']}", ref["link"])
+        notify.push(ctx.request, [existing["owner_id"]], "unassigned",
+                    f"{actor} reassigned {ref['title']} to someone else", ref["link"])
+        everyone -= {ref["owner_id"], existing["owner_id"]}
+    if ctx.changed("status"):
+        notify.push(ctx.request, everyone, "status",
+                    f"{actor} moved {ref['title']} to {_label(ctx.values['status'])}", ref["link"])
+    changed = sorted(_label(name) for name in DELIVERABLE_FIELDS if name not in QUIET_FIELDS and ctx.changed(name))
+    if changed:
+        notify.push(ctx.request, everyone, "updated", f"{actor} changed the {', '.join(changed)} of {ref['title']}",
+                    ref["link"])
+
+
 def _deliverables_after_write(ctx: WriteContext, record_id: int) -> None:
     """Dependents follow their blockers: finishing one releases the work it held up, reopening it blocks that
-    work again."""
-    if not ctx.changed("status"):
-        return
-    if ctx.values["status"] == "completed":
-        release_unblocked(ctx.request, _blocked_by(record_id))
-    elif ctx.existing["status"] == "completed":
-        block_waiting(ctx.request, _blocked_by(record_id))
+    work again. Then the people involved are told."""
+    if ctx.existing is not None and ctx.changed("status"):
+        if ctx.values["status"] == "completed":
+            release_unblocked(ctx.request, _blocked_by(record_id))
+        elif ctx.existing["status"] == "completed":
+            block_waiting(ctx.request, _blocked_by(record_id))
+    _notify_deliverable_change(ctx, record_id)
 
 
 def _deliverables_before_delete(request: Request, record: dict) -> None:
@@ -570,6 +666,9 @@ def _deliverables_before_delete(request: Request, record: dict) -> None:
     targets = _blocked_by(record["id"])
     db.execute("DELETE FROM deliverable_links WHERE source_id = %s", (record["id"],))
     release_unblocked(request, targets)
+    notify.push(request, {record["owner_id"], record["reporter_id"], record["project_manager_id"]}, "deleted",
+                f"{request.user['name']} deleted {record['key']} \u201c{record['name']}\u201d",
+                f"/projects/{record['project_key']}?tab=deliverables")
 
 
 def resolve_deliverable(raw: str) -> int:
@@ -584,10 +683,7 @@ def resolve_deliverable(raw: str) -> int:
     return row["id"]
 
 
-DELIVERABLES = Resource(
-    name="deliverables",
-    table="deliverables",
-    fields={
+DELIVERABLE_FIELDS = {
         "project_id": Field("ref", required=True, nullable=False, ref="projects"),
         "name": Field("string", required=True, nullable=False, max_len=200),
         "description": Field("string", max_len=10000),
@@ -599,11 +695,18 @@ DELIVERABLES = Resource(
         "due_date": Field("date"),
         "estimated_hours": Field("decimal", minimum=Decimal(0), maximum=Decimal(100000)),
         "progress_pct": Field("integer", nullable=False, minimum=Decimal(0), maximum=Decimal(100)),
-    },
+}
+CONTRIBUTOR_EDITABLE = frozenset(DELIVERABLE_FIELDS) - {"project_id"}
+
+DELIVERABLES = Resource(
+    name="deliverables",
+    table="deliverables",
+    fields=DELIVERABLE_FIELDS,
     policy=DeliverablePolicy(),
     select=(
         "t.*, p.key || '-' || t.number AS key, p.key AS project_key, p.name AS project_name,"
         " p.manager_id AS project_manager_id, p.start_date AS project_start_date, p.end_date AS project_end_date,"
+        " p.edit_access AS project_edit_access, p.comment_access AS project_comment_access,"
         " o.name AS owner_name, r.name AS reporter_name,"
         " (t.due_date < current_date AND t.status <> 'completed') AS is_overdue,"
         " (SELECT count(*) FROM deliverable_links bl JOIN deliverables bs ON bs.id = bl.source_id"
@@ -620,6 +723,7 @@ DELIVERABLES = Resource(
         "due_from": Filter("t.due_date", "date", op=">="),
         "due_to": Filter("t.due_date", "date", op="<="),
         "overdue": Filter("t.due_date", predicate="t.due_date < current_date AND t.status <> 'completed'"),
+        "unassigned": Filter("t.owner_id", predicate="t.owner_id IS NULL"),
     },
     search=("p.key || '-' || t.number", "t.name", "t.description", "p.name"),
     sorts={"key": "p.key || '-' || lpad(t.number::text, 9, '0')", "name": "t.name", "status": "t.status",
@@ -740,6 +844,14 @@ def _leaves_before_write(ctx: WriteContext) -> None:
                                               f"({clash['start_date']} to {clash['end_date']})"})
 
 
+def _leaves_after_write(ctx: WriteContext, record_id: int) -> None:
+    """Someone whose leave was recorded or changed by another person (their lead, an admin) is told."""
+    leave = db.fetch_one("SELECT user_id, start_date, end_date FROM leaves WHERE id = %s", (record_id,))
+    verb = "recorded" if ctx.existing is None else "changed"
+    notify.push(ctx.request, [leave["user_id"]], "leave",
+                f"{ctx.user['name']} {verb} leave for you: {leave['start_date']} to {leave['end_date']}", "/leave")
+
+
 LEAVES = Resource(
     name="leaves",
     table="leaves",
@@ -759,6 +871,7 @@ LEAVES = Resource(
     default_sort="-start_date",
     hidden=("created_by",),
     before_write=_leaves_before_write,
+    after_write=_leaves_after_write,
 )
 
 

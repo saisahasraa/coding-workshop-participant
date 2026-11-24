@@ -68,7 +68,13 @@ export default function ProjectsPage() {
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>New project</Button>
         )}
       />
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems={{ sm: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{
+          alignItems: { sm: 'center' },
+          mb: 2
+        }}>
         <SearchField value={list.q} onChange={list.setSearch} label="Search key, name, description" />
         <TextField select label="Status" value={list.values.status} onChange={(e) => list.setFilter('status', e.target.value)}
           sx={{ minWidth: 160 }} fullWidth={false}>
@@ -106,11 +112,17 @@ export default function ProjectsPage() {
         emptyText="No projects match these filters."
         renderCard={(row) => (
           <Stack spacing={1}>
-            <Stack direction="row" justifyContent="space-between" spacing={1}>
-              <Typography fontWeight={600}>{row.key} · {row.name}</Typography>
+            <Stack direction="row" spacing={1} sx={{
+              justifyContent: "space-between"
+            }}>
+              <Typography sx={{
+                fontWeight: 600
+              }}>{row.key} · {row.name}</Typography>
               <Stack direction="row" spacing={0.5}><StatusChip value={row.status} /><HealthChip level={row.health} reasons={row.health_reasons} /></Stack>
             </Stack>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {row.manager_name} · {row.department_name}{row.end_date && ` · due ${formatDate(row.end_date)}`}
             </Typography>
             <ProgressCell value={row.progress_pct} />

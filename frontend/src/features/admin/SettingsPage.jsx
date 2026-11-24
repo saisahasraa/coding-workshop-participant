@@ -22,6 +22,7 @@ import PageHeader from '../../components/PageHeader';
 import useApi from '../../hooks/useApi';
 import { formatDateTime, labelize } from '../../utils/format';
 import { describeValue, fromDraft, GROUP_TITLES, isList, toDraft } from './settingEditors';
+import ToneChip from '../../components/ToneChip';
 
 function History({ setting, onClose }) {
   const loader = useCallback((signal) => auditApi.list({ entity: 'app_settings', entity_id: setting.key, limit: 10 }, signal), [setting.key]);
@@ -32,12 +33,16 @@ function History({ setting, onClose }) {
       <DialogContent>
         {error && <Alert severity="error">{error.message}</Alert>}
         {!data && !error && <LinearProgress aria-label="Loading history" />}
-        {data && !data.data.length && <Typography color="text.secondary">Never changed from its default.</Typography>}
+        {data && !data.data.length && <Typography sx={{
+          color: "text.secondary"
+        }}>Never changed from its default.</Typography>}
         <Stack component="ul" spacing={1} sx={{ p: 0, m: 0, listStyle: 'none' }}>
           {(data?.data || []).map((row) => (
             <li key={row.id}>
               <Typography>{describeValue(row.changes.value?.from)} → <b>{describeValue(row.changes.value?.to)}</b></Typography>
-              <Typography variant="body2" color="text.secondary">{row.actor_name || 'Unknown'} · {formatDateTime(row.created_at)}</Typography>
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>{row.actor_name || 'Unknown'} · {formatDateTime(row.created_at)}</Typography>
             </li>
           ))}
         </Stack>
@@ -96,10 +101,21 @@ function SettingRow({ setting, onChanged }) {
 
   return (
     <Stack spacing={1} sx={{ py: 1.5, borderTop: 1, borderColor: 'divider' }}>
-      <Typography variant="body2" color="text.secondary">{setting.description}</Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'flex-start' }}>
+      <Typography variant="body2" sx={{
+        color: "text.secondary"
+      }}>{setting.description}</Typography>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{
+        alignItems: { md: 'flex-start' }
+      }}>
         <Stack sx={{ flex: 1, maxWidth: { md: 420 } }}><Editor setting={setting} draft={draft} onChange={setDraft} error={error} /></Stack>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{
+            alignItems: "center",
+            flexWrap: "wrap"
+          }}>
           <Button variant="contained" disabled={!dirty || busy}
             onClick={() => run(() => settingsApi.update(setting.key, fromDraft(setting, draft)), `${setting.key} saved`)}>Save</Button>
           {setting.overridden && (
@@ -108,10 +124,19 @@ function SettingRow({ setting, onChanged }) {
           <Button onClick={() => setHistory(true)}>History</Button>
         </Stack>
       </Stack>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: "center",
+          flexWrap: "wrap"
+        }}>
         <Chip size="small" variant="outlined" label={`Default: ${describeValue(setting.default)}`} />
-        {setting.overridden && <Chip size="small" color="primary" label="Customized" />}
-        {setting.updated_at && <Typography variant="body2" color="text.secondary">Changed by {setting.updated_by_name || 'unknown'} · {formatDateTime(setting.updated_at)}</Typography>}
+        {setting.overridden && <ToneChip tone="primary" label="Customized" />}
+        {setting.updated_at && <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>Changed by {setting.updated_by_name || 'unknown'} · {formatDateTime(setting.updated_at)}</Typography>}
       </Stack>
       {history && <History setting={setting} onClose={() => setHistory(false)} />}
     </Stack>

@@ -1,20 +1,28 @@
 import { useCallback, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import TableRowsOutlinedIcon from '@mui/icons-material/TableRowsOutlined';
+import ViewKanbanOutlinedIcon from '@mui/icons-material/ViewKanbanOutlined';
 import { deliverablesApi } from '../../api/resources';
+import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import DueDate from '../../components/DueDate';
 import FormDialog from '../../components/FormDialog';
 import { useNotify } from '../../components/NotificationProvider';
+import Person from '../../components/Person';
 import ProgressCell from '../../components/ProgressCell';
 import ResponsiveList from '../../components/ResponsiveList';
 import SearchField from '../../components/SearchField';
@@ -23,22 +31,16 @@ import useApi from '../../hooks/useApi';
 import useListQuery from '../../hooks/useListQuery';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
-import { formatDate, labelize } from '../../utils/format';
+import { labelize } from '../../utils/format';
 import deliverableFields from './deliverableFields';
+import DeliverablesBoard from './DeliverablesBoard';
+import StatusMenu from './StatusMenu';
 
-function DueDate({ row }) {
-  if (!row.due_date) return null;
-  return (
-    <Typography variant="body2" component="span" color={row.is_overdue ? 'error' : 'inherit'} fontWeight={row.is_overdue ? 600 : 400}>
-      {formatDate(row.due_date)}{row.is_overdue && ' · overdue'}
-    </Typography>
-  );
-}
-
-DueDate.propTypes = { row: PropTypes.object.isRequired };
+const BOARD_LIMIT = 200;
 
 /**
- * Deliverables list with filters and per-record edit/delete according to the API's permissions.
+ * Deliverables as a table (cards on phones) or a board, with filters, in-place status changes and
+ * per-record edit/delete according to the API's permissions.
  * `baseQuery` fixes filters (e.g. `{project_id}` or `{owner_id: 'me'}`).
  */
 export default function DeliverablesView({
@@ -46,18 +48,33 @@ export default function DeliverablesView({
 }) {
   const notify = useNotify();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { meta } = useMeta();
-  const list = useListQuery({ sort: 'due_date', filters: ['status', 'overdue'] });
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'board' ? 'board' : 'table';
+  const ownerFixed = 'owner_id' in baseQuery;
+  const list = useListQuery({ sort: 'due_date', filters: ['status', 'overdue', 'unassigned', ...(ownerFixed ? [] : ['owner_id'])] });
   const [editing, setEditing] = useState(null); // {} = new, record = edit
   const [deleting, setDeleting] = useState(null);
   const lookups = useLookups(['assignees'], Boolean(editing));
+  const statuses = useMemo(() => (meta?.deliverable_statuses || []).map((s) => s.value), [meta]);
 
   const { query } = list;
-  const fullQuery = useMemo(() => ({ ...query, ...baseQuery }), [query, baseQuery]);
+  const fullQuery = useMemo(
+    () => ({ ...query, ...baseQuery, ...(view === 'board' ? { limit: BOARD_LIMIT, offset: 0 } : {}) }),
+    [query, baseQuery, view],
+  );
   const loader = useCallback((signal) => deliverablesApi.list(fullQuery, signal), [fullQuery]);
   const { data, error, loading, reload } = useApi(loader);
+  const rows = data?.data || [];
 
   const refresh = () => { reload(); onChange?.(); };
+  const setView = (next) => setParams((prev) => {
+    const copy = new URLSearchParams(prev);
+    if (next === 'board') copy.set('view', 'board'); else copy.delete('view');
+    return copy;
+  }, { replace: true });
+  const toggle = (name, value) => list.setFilter(name, list.values[name] === value ? '' : value);
 
   const handleSubmit = async (values) => {
     if (editing.id) {
@@ -80,71 +97,90 @@ export default function DeliverablesView({
       )}
     </Stack>
   );
+  const due = (row) => <DueDate date={row.due_date} done={row.status === 'completed'} />;
 
   const columns = [
-    { field: 'key', headerName: 'Key', width: 100 },
-    { field: 'name', headerName: 'Deliverable', flex: 1, minWidth: 180 },
-    ...(showProject ? [{ field: 'project', headerName: 'Project', width: 100, valueGetter: (_v, row) => row.project_key }] : []),
-    { field: 'owner', headerName: 'Owner', width: 150, valueGetter: (_v, row) => row.owner_name || '—' },
-    { field: 'status', headerName: 'Status', width: 130, renderCell: ({ value }) => <StatusChip value={value} /> },
-    { field: 'priority', headerName: 'Priority', width: 110, renderCell: ({ value }) => <StatusChip value={value} /> },
-    { field: 'due_date', headerName: 'Due', width: 160, renderCell: ({ row }) => <DueDate row={row} /> },
-    { field: 'progress_pct', headerName: 'Progress', width: 150, renderCell: ({ value }) => <ProgressCell value={value} /> },
-    { field: 'actions', headerName: '', width: 96, sortable: false, renderCell: ({ row }) => actions(row) },
+    { field: 'key', headerName: 'Key', width: 90, renderCell: ({ value }) => <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>{value}</Typography> },
+    { field: 'name', headerName: 'Deliverable', flex: 1, minWidth: 160 },
+    ...(showProject ? [{ field: 'project', headerName: 'Project', width: 86, valueGetter: (_v, row) => row.project_key }] : []),
+    { field: 'owner', headerName: 'Owner', width: 165, renderCell: ({ row }) => <Person name={row.owner_name} /> },
+    { field: 'status', headerName: 'Status', width: 142, renderCell: ({ row }) => <StatusMenu item={row} onChanged={refresh} /> },
+    { field: 'priority', headerName: 'Priority', width: 96, renderCell: ({ value }) => <StatusChip value={value} /> },
+    { field: 'due_date', headerName: 'Due', width: 136, renderCell: ({ row }) => due(row) },
+    { field: 'progress_pct', headerName: 'Progress', width: 130, renderCell: ({ value }) => <ProgressCell value={value} /> },
+    { field: 'actions', headerName: '', width: 84, sortable: false, renderCell: ({ row }) => actions(row) },
+  ];
+
+  const quick = [
+    { name: 'overdue', value: 'true', label: 'Overdue' },
+    ...(!ownerFixed && user.role !== 'viewer' ? [{ name: 'owner_id', value: 'me', label: 'Mine' }] : []),
+    ...(!ownerFixed ? [{ name: 'unassigned', value: 'true', label: 'Unassigned' }] : []),
   ];
 
   return (
     <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems={{ sm: 'center' }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2, alignItems: { md: 'center' } }}>
         <SearchField value={list.q} onChange={list.setSearch} label="Search deliverables" />
         <TextField select label="Status" value={list.values.status} onChange={(e) => list.setFilter('status', e.target.value)}
           sx={{ minWidth: 160 }} fullWidth={false}>
           <MenuItem value="">All statuses</MenuItem>
-          {(meta?.deliverable_statuses || []).map((s) => <MenuItem key={s.value} value={s.value}>{labelize(s.value)}</MenuItem>)}
+          {statuses.map((s) => <MenuItem key={s} value={s}>{labelize(s)}</MenuItem>)}
         </TextField>
-        <TextField select label="Due" value={list.values.overdue} onChange={(e) => list.setFilter('overdue', e.target.value)}
-          sx={{ minWidth: 140 }} fullWidth={false}>
-          <MenuItem value="">Any</MenuItem>
-          <MenuItem value="true">Overdue</MenuItem>
-          <MenuItem value="false">On track</MenuItem>
-        </TextField>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing({})} sx={{ ml: { sm: 'auto' } }}>
-            Add deliverable
-          </Button>
-        )}
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: { xs: 'wrap', md: 'nowrap' }, rowGap: 1 }} role="group" aria-label="Quick filters">
+          {quick.map((f) => {
+            const on = list.values[f.name] === f.value;
+            return <Chip key={f.name} label={f.label} clickable aria-pressed={on} color={on ? 'primary' : 'default'} variant={on ? 'filled' : 'outlined'} onClick={() => toggle(f.name, f.value)} />;
+          })}
+        </Stack>
+        <Stack direction="row" spacing={1.5} sx={{ ml: { md: 'auto' }, alignItems: 'center', flexShrink: 0, justifyContent: 'space-between' }}>
+          <ToggleButtonGroup size="small" exclusive value={view} onChange={(_e, next) => next && setView(next)} aria-label="View">
+            <ToggleButton value="table" aria-label="Table view"><TableRowsOutlinedIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value="board" aria-label="Board view"><ViewKanbanOutlinedIcon fontSize="small" /></ToggleButton>
+          </ToggleButtonGroup>
+          {canCreate && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing({})} sx={{ whiteSpace: 'nowrap' }}>Add deliverable</Button>}
+        </Stack>
       </Stack>
-      <ResponsiveList
-        rows={data?.data || []}
-        total={data?.total || 0}
-        loading={loading}
-        error={error}
-        columns={columns}
-        page={list.page}
-        pageSize={list.pageSize}
-        sort={list.sort}
-        onPageChange={list.setPage}
-        onPageSizeChange={list.setPageSize}
-        onSortChange={list.setSort}
-        onRowClick={(row) => navigate(`/deliverables/${row.key}`)}
-        emptyText="No deliverables yet."
-        renderCard={(row) => (
-          <Stack spacing={1}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-              <Typography fontWeight={600}><Typography component="span" color="text.secondary" fontWeight={500}>{row.key}</Typography> {row.name}</Typography>
-              {actions(row)}
+
+      {view === 'board' ? (
+        <>
+          {data && data.total > rows.length && (
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>Showing the first {rows.length} of {data.total}. Narrow the filters to see the rest.</Typography>
+          )}
+          {error && !rows.length ? <Typography color="error">{error.message}</Typography>
+            : <DeliverablesBoard rows={rows} statuses={statuses} showProject={showProject} onChanged={refresh} />}
+        </>
+      ) : (
+        <ResponsiveList
+          rows={rows}
+          total={data?.total || 0}
+          loading={loading}
+          error={error}
+          columns={columns}
+          page={list.page}
+          pageSize={list.pageSize}
+          sort={list.sort}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          onSortChange={list.setSort}
+          onRowClick={(row) => navigate(`/deliverables/${row.key}`)}
+          emptyText="No deliverables match."
+          renderCard={(row) => (
+            <Stack spacing={1}>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Typography sx={{ fontWeight: 600 }}><Typography component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>{row.key}</Typography> {row.name}</Typography>
+                {actions(row)}
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
+                <StatusMenu item={row} onChanged={refresh} /><StatusChip value={row.priority} />
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Person name={row.owner_name} />{due(row)}
+              </Stack>
+              <ProgressCell value={row.progress_pct} />
             </Stack>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <StatusChip value={row.status} /><StatusChip value={row.priority} />
-            </Stack>
-            <Typography variant="body2" color="text.secondary">
-              {row.owner_name || 'Unassigned'}
-              {row.due_date && ' · '}<DueDate row={row} />
-            </Typography>
-            <ProgressCell value={row.progress_pct} />
-          </Stack>
-        )}
-      />
+          )}
+        />
+      )}
       {editing && (
         <FormDialog
           open

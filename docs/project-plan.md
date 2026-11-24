@@ -660,18 +660,56 @@ Known decisions left as they are: work blocked by a deliverable of a *cancelled*
 
 > **Status: built, awaiting validation.** `dashboard.py`, `search.py`, the read-only `audit-log` resource (the engine gained `read_only`, `search_records` and a computed-fields hook), three new settings (`dashboard.list_size`, `dashboard.due_soon_days`, `search.results_per_type`); 303 backend and 122 frontend tests. The dashboard is now the home page. A person found in search opens that person's deliverables.
 
-### Phase 5 — Quality & delivery
+### Phase 5 — Experience, quality & delivery
 
-- Responsive and accessibility pass (labels, focus order, contrast, keyboard; mobile layouts).
-- Tests to targets:
-  - Backend ≥ 80 % (CRUD and error paths ≥ 90 %).
-  - Frontend ≥ 80 %.
-  - Cypress E2E per role (login → project → deliverable → allocation → expense → dashboard).
-  - Artillery load test on list and report endpoints (record p95).
-- Cloud hardening: smoke-test script after deploy, security review (limits, token lifetimes, secrets only in env).
-- README: architecture, setup commands, demo accounts, API reference, decisions and trade-offs, test results, known gaps.
+> **Design.** Two tracks: make the product pleasant to use, and prove it works.
+>
+> **A. Seeing the UI (tooling first).** `frontend/tools/screenshots.mjs` drives a headless Chromium (Playwright): it signs in through the API, opens every page at desktop and phone widths in light and dark mode and writes one PNG each. UI work is reviewed from these images, not from the code. Playwright replaces the planned Cypress: one tool gives both the screenshots and the end-to-end tests.
+>
+> **B. Visual redesign.** One theme file remains the single source of look and feel.
+> - *Colour and type:* Inter, an indigo primary on slate neutrals, soft "tonal" status chips (tinted background, coloured text) instead of saturated fills, status colours reserved for status.
+> - *Dark mode:* MUI colour schemes with CSS variables; a toggle in the top bar (light / dark / follow the system), remembered per browser.
+> - *Shell:* navigation grouped into sections (Overview, Work, People, Money, Admin) with a clear active item; search centred in the top bar with a `/` shortcut; content uses the full width up to a comfortable maximum.
+> - *Dashboard:* rebuilt on a real grid: a full-width KPI row with icons (each tile opens its list), then panels that fill their columns; no truncated text.
+> - *Lists:* aligned cells, people shown with avatars, due dates in words ("in 3 days", "5 days overdue"), one-click filter chips, friendlier empty states.
+>
+> **C. Faster everyday actions.**
+> - Change a deliverable's **status in place** from any list (table, phone cards, board, my work): click the status, pick the new one. The API's rules still apply (blocked work cannot be started), and the message shows inline.
+> - A **board view** for a project's deliverables: one column per status, as an alternative to the table.
+> - Quick filters ("Overdue", "Mine", "Unassigned") and keyboard access to search.
+>
+> **D. Proof.**
+> - *End-to-end (Playwright)* against the real stack: sign-in per role, project → deliverable → status change → blocker rules → expense → dashboard → settings/audit, plus phone-width navigation.
+> - *Accessibility:* axe checks on the main pages in both colour modes inside the E2E run; keyboard paths for the new controls.
+> - *Load:* `bin/load-test.py` (no dependencies) hits list and report endpoints concurrently and reports p50/p95/errors.
+> - *After deploy:* `bin/smoke-test.sh` checks health, sign-in, a list, a report and the SPA.
+> - *Security review* of limits, token lifetimes, headers and secrets handling.
+> - *README:* architecture, setup, demo accounts, API reference, decisions and trade-offs, test results, known gaps.
 
-✅ **Done when** a fresh clone followed by the documented commands gives a working app locally and on CloudFront.
+✅ **Done when** every page looks right in the screenshots at desktop and phone widths in both modes, the E2E suite passes against the local stack, and a fresh clone plus the documented commands gives a working app locally and on CloudFront.
+
+> **Status: built, awaiting validation.** Screenshot tool, redesign with dark mode, in-place status changes, board view, quick filters; 12 Playwright end-to-end tests including axe checks; load, smoke and E2E runner scripts; sign-in lockout (migration 7), API security headers, CloudFront security headers policy; [SOLUTION.md](../SOLUTION.md). The screenshots exposed that MUI 9 ignores layout props written directly on components, which had left many rows unaligned; all were moved into `sx` with MUI's codemod.
+
+### Phase 6 — Collaboration: access rules, notifications, mentions, attachments, better forms
+
+> **Design.**
+>
+> **1. Who may change what (configurable).** Two per-project switches, each `inherit | members | everyone`, with organisation defaults in settings (`projects.default_edit_access`, `projects.default_comment_access`, both `everyone`):
+> - *Edit access*: who may add and edit deliverables in the project.
+> - *Comment access*: who may comment and attach files.
+>
+> "Everyone" never includes viewers. "Members" are the project's manager and anyone who is assignee or reporter of a deliverable in it. Admins and the project's manager can always do everything; the **assignee and reporter of a deliverable can always edit it** (all fields except moving it to another project). Deleting and linking stay with the manager and admins. Admins set the defaults in Settings; managers set their project's switches in the project form.
+>
+> **2. Notifications.** A `notifications` table written in the same transaction as the change, shown in a bell in the top bar with an unread count. People are told when they are assigned or unassigned, when work they are part of (assignee, reporter, project manager, earlier commenters) changes status or details, is commented on, deleted, blocked or released; when they are @mentioned; when their project changes status or manager; and when someone records leave for them. Nobody is notified of their own actions.
+> *Email:* each notification can also go out by email through a pluggable sender (Amazon SES), switched by `notifications.email_enabled`. **It is off here: the workshop role has no SES permission and the Lambda has no network route to SES.** Turning it on needs `ses:SendEmail`, a verified sender (`NOTIFY_FROM_EMAIL`) and a VPC endpoint or NAT.
+>
+> **3. @mentions.** Typing `@` in a comment offers people; the comment stores the mentioned user ids (`comments.mentions`), shows them highlighted, and notifies them.
+>
+> **4. Attachments.** Files go **directly from the browser to a private S3 bucket** through a short-lived signed upload link, so the Lambda never handles file bytes. `attachments` rows hold the metadata. In a comment, a file is inserted at the cursor as `[name](attachment:ID)`; images show as thumbnails. Downloads use short-lived signed links, so a file is only reachable by someone who can see the deliverable. An **Artifacts** panel under Details lists every file of the deliverable. Size limit: `attachments.max_size_mb`.
+>
+> **5. Forms.** Create/edit dialogs are regrouped into titled sections on a two-column grid, with searchable people pickers and clearer help. Deliverables can be created from the Deliverables page by choosing the project.
+
+✅ **Done when** a team member can add a deliverable to an open project, a manager can restrict a project to its members, a comment with an @mention and an image notifies the right people and shows the image, and the file appears under Artifacts.
 
 ---
 

@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import PropTypes from 'prop-types';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -18,6 +17,7 @@ import useApi from '../../hooks/useApi';
 import useListQuery from '../../hooks/useListQuery';
 import { formatDateTime, labelize } from '../../utils/format';
 import { changeLines } from './changeLines';
+import ToneChip from '../../components/ToneChip';
 
 const ENTITIES = ['projects', 'deliverables', 'expenses', 'users', 'teams', 'departments', 'leaves', 'comments', 'deliverable_links', 'app_settings'];
 const ACTIONS = ['create', 'update', 'delete'];
@@ -28,13 +28,17 @@ function Detail({ entry, onClose }) {
     <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="audit-title">
       <DialogTitle id="audit-title">{labelize(entry.action)} · {entry.entity} {entry.entity_id}</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
+        <Typography variant="body2" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           {entry.actor_name || 'Unknown'} · {formatDateTime(entry.created_at)}{entry.request_id && ` · request ${entry.request_id}`}
         </Typography>
         <Stack component="dl" spacing={1} sx={{ m: 0 }}>
           {changeLines(entry).map(([field, text]) => (
             <div key={field}>
-              <Typography component="dt" variant="body2" color="text.secondary">{field}</Typography>
+              <Typography component="dt" variant="body2" sx={{
+                color: "text.secondary"
+              }}>{field}</Typography>
               <Typography component="dd" sx={{ m: 0, overflowWrap: 'anywhere' }}>{text}</Typography>
             </div>
           ))}
@@ -50,7 +54,7 @@ Detail.propTypes = { entry: PropTypes.object.isRequired, onClose: PropTypes.func
 const COLUMNS = [
   { field: 'created_at', headerName: 'When', width: 180, valueFormatter: (value) => formatDateTime(value) },
   { field: 'actor', headerName: 'Who', width: 170, valueGetter: (_v, row) => row.actor_name || 'Unknown' },
-  { field: 'action', headerName: 'Action', width: 110, renderCell: ({ value }) => <Chip size="small" color={ACTION_COLORS[value]} label={labelize(value)} /> },
+  { field: 'action', headerName: 'Action', width: 110, renderCell: ({ value }) => <ToneChip tone={ACTION_COLORS[value]} label={labelize(value)} /> },
   { field: 'entity', headerName: 'Entity', width: 160 },
   { field: 'entity_id', headerName: 'ID', width: 140, sortable: false },
   { field: 'changes', headerName: 'Changes', flex: 1, minWidth: 220, sortable: false, valueGetter: (_v, row) => changeLines(row).map(([f]) => f).join(', ') },
@@ -67,7 +71,13 @@ export default function AuditLogPage() {
   return (
     <>
       <PageHeader title="Audit log" subtitle="Every create, update and delete, with who did it. Open an entry to see the fields." />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems={{ md: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{
+          alignItems: { md: 'center' },
+          mb: 2
+        }}>
         <SearchField value={list.q} onChange={list.setSearch} label="Search entity, id or person" />
         <TextField select label="Entity" value={list.values.entity} onChange={(e) => list.setFilter('entity', e.target.value)} sx={{ minWidth: 180 }} fullWidth={false}>
           <MenuItem value="">All entities</MenuItem>
@@ -88,8 +98,14 @@ export default function AuditLogPage() {
         emptyText="No entries match these filters."
         renderCard={(row) => (
           <Stack spacing={0.5}>
-            <Stack direction="row" justifyContent="space-between"><Typography fontWeight={600}>{row.entity} {row.entity_id}</Typography><Chip size="small" color={ACTION_COLORS[row.action]} label={labelize(row.action)} /></Stack>
-            <Typography variant="body2" color="text.secondary">{row.actor_name || 'Unknown'} · {formatDateTime(row.created_at)}</Typography>
+            <Stack direction="row" sx={{
+              justifyContent: "space-between"
+            }}><Typography sx={{
+              fontWeight: 600
+            }}>{row.entity} {row.entity_id}</Typography><ToneChip tone={ACTION_COLORS[row.action]} label={labelize(row.action)} /></Stack>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{row.actor_name || 'Unknown'} · {formatDateTime(row.created_at)}</Typography>
           </Stack>
         )}
       />

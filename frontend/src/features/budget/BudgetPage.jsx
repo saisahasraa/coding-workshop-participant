@@ -68,7 +68,9 @@ export default function BudgetPage() {
         </Grid>
       )}
 
-      {data && !rows.length && <Typography color="text.secondary">No projects match.</Typography>}
+      {data && !rows.length && <Typography sx={{
+        color: "text.secondary"
+      }}>No projects match.</Typography>}
       {rows.length > 0 && (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small" aria-label="Budget by project">
@@ -88,8 +90,12 @@ export default function BudgetPage() {
               {rows.map((p) => (
                 <TableRow key={p.id} hover>
                   <TableCell>
-                    <Link component={RouterLink} to={`/projects/${p.key}?tab=budget`} underline="hover" fontWeight={600}>{p.key}</Link>
-                    <Typography variant="body2" color="text.secondary">{p.name}</Typography>
+                    <Link component={RouterLink} to={`/projects/${p.key}?tab=budget`} underline="hover" sx={{
+                      fontWeight: 600
+                    }}>{p.key}</Link>
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>{p.name}</Typography>
                   </TableCell>
                   <TableCell><StatusChip value={p.status} /></TableCell>
                   <TableCell align="right"><Money value={p.planned_budget} currency={currency} /></TableCell>
@@ -108,11 +114,17 @@ export default function BudgetPage() {
       {data?.by_category.length > 0 && (
         <Stack spacing={1} sx={{ mt: 3 }}>
           <Typography variant="h3">Spending by category</Typography>
-          <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={3} useFlexGap sx={{
+            flexWrap: "wrap"
+          }}>
             {data.by_category.map((c) => (
               <div key={c.category}>
-                <Typography variant="body2" color="text.secondary">{labelize(c.category)}</Typography>
-                <Typography fontWeight={600}>{formatMoney(c.amount, currency)}</Typography>
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>{labelize(c.category)}</Typography>
+                <Typography sx={{
+                  fontWeight: 600
+                }}>{formatMoney(c.amount, currency)}</Typography>
               </div>
             ))}
           </Stack>

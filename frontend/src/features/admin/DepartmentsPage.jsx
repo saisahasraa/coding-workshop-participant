@@ -58,8 +58,14 @@ export default function DepartmentsPage() {
         page={list.page} pageSize={list.pageSize} sort={list.sort}
         onPageChange={list.setPage} onPageSizeChange={list.setPageSize} onSortChange={list.setSort}
         renderCard={(row) => (
-          <Stack direction="row" justifyContent="space-between">
-            <div><Typography fontWeight={600}>{row.code} · {row.name}</Typography><Typography variant="body2" color="text.secondary">{row.project_count} projects</Typography></div>
+          <Stack direction="row" sx={{
+            justifyContent: "space-between"
+          }}>
+            <div><Typography sx={{
+              fontWeight: 600
+            }}>{row.code} · {row.name}</Typography><Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{row.project_count} projects</Typography></div>
             {actions(row)}
           </Stack>
         )}

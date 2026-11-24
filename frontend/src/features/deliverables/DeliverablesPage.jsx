@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import DeliverablesView from './DeliverablesView';
 
-/** Every deliverable the user can see, across projects; `?owner_id=` narrows it to one person's work. */
+/**
+ * Every deliverable the user can see, across projects. `?person=<id>` (from search) narrows it to one
+ * person's work; that is separate from the "Mine" quick filter, which stays switchable.
+ */
 export default function DeliverablesPage() {
   const [params] = useSearchParams();
-  const ownerId = params.get('owner_id');
+  const ownerId = params.get('person');
   const baseQuery = useMemo(() => (ownerId ? { owner_id: ownerId } : {}), [ownerId]);
   return (
     <>

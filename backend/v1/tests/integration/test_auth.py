@@ -132,3 +132,68 @@ def test_missing_jwt_secret_is_a_server_error(call, make_user, monkeypatch):
     user = make_user()
     monkeypatch.setattr(auth, "ENV", replace(ENV, jwt_secret=""))
     assert call("GET", "/auth/me", token=user["token"])[0] == 500
+
+
+# --- sign-in lockout and response headers -----------------------------------------------------------------------
+
+def _try_login(call, user, password):
+    return call("POST", "/auth/login", {"email": user["email"], "password": password})
+
+
+def test_repeated_failures_lock_the_account_for_a_while(call, make_user):
+    user = make_user("team_member")
+    for _ in range(4):
+        status, body = _try_login(call, user, "wrong-password")
+        assert status == 401 and body["error"]["code"] == "invalid_credentials"
+    assert _try_login(call, user, "wrong-password")[0] == 401                     # the fifth failure locks it
+    status, body = _try_login(call, user, user["password"])                       # even the right password waits
+    assert status == 429 and body["error"]["code"] == "account_locked" and "15 minute" in body["error"]["message"]
+
+    db.execute("UPDATE users SET locked_until = now() - interval '1 second' WHERE id = %s", (user["id"],))
+    assert _try_login(call, user, user["password"])[0] == 200                     # the lock expires by itself
+    row = db.fetch_one("SELECT failed_logins, locked_until FROM users WHERE id = %s", (user["id"],))
+    assert row == {"failed_logins": 0, "locked_until": None}
+
+
+def test_a_successful_sign_in_clears_earlier_failures(call, make_user):
+    user = make_user("team_member")
+    for _ in range(3):
+        _try_login(call, user, "nope")
+    assert db.fetch_one("SELECT failed_logins FROM users WHERE id = %s", (user["id"],))["failed_logins"] == 3
+    assert _try_login(call, user, user["password"])[0] == 200
+    for _ in range(4):
+        assert _try_login(call, user, "nope")[0] == 401                           # counting started again
+    assert _try_login(call, user, user["password"])[0] == 200
+
+
+def test_lockout_limits_are_settings_and_an_admin_reset_unlocks(call, make_user):
+    admin, user = make_user("admin"), make_user("team_member")
+    assert call("PUT", "/settings/auth.max_failed_logins", {"value": 3}, admin["token"])[0] == 200
+    assert call("PUT", "/settings/auth.lockout_minutes", {"value": 60}, admin["token"])[0] == 200
+    for _ in range(3):
+        _try_login(call, user, "nope")
+    status, body = _try_login(call, user, user["password"])
+    assert status == 429 and "60 minute" in body["error"]["message"]
+    assert call("PUT", f"/users/{user['id']}", {"password": "Fresh#Pass123"}, admin["token"])[0] == 200
+    assert _try_login(call, user, "Fresh#Pass123")[0] == 200
+
+
+def test_unknown_emails_are_not_revealed_and_lock_state_is_private(call, make_user):
+    admin = make_user("admin")
+    for _ in range(8):
+        status, body = call("POST", "/auth/login", {"email": "nobody@acme.example", "password": "whatever1"})
+        assert status == 401 and body["error"]["code"] == "invalid_credentials"
+    me = call("GET", "/auth/me", token=admin["token"])[1]["user"]
+    listed = call("GET", f"/users/{admin['id']}", token=admin["token"])[1]
+    for record in (me, listed):
+        assert "failed_logins" not in record and "locked_until" not in record and "password_hash" not in record
+
+
+def test_api_responses_are_never_cached_or_sniffed():
+    import function
+    from tests.conftest import make_event
+
+    for path in ("/health", "/projects", "/nope"):
+        headers = function.handler(make_event("GET", path))["headers"]
+        assert headers["Cache-Control"] == "no-store" and headers["X-Content-Type-Options"] == "nosniff"
+        assert headers["X-Request-Id"]

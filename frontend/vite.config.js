@@ -24,6 +24,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Unit and component tests only; the end-to-end specs in e2e/ run with Playwright.
+    include: ['src/**/*.test.{js,jsx}'],
     setupFiles: ['./src/test/setup.js'],
     css: false,
     // Multi-step UI flows on a small CI/VDI machine need more than the 5 s default.

@@ -6,11 +6,19 @@ import Typography from '@mui/material/Typography';
 /** Page title with optional subtitle and right-aligned actions; stacks on small screens. */
 export default function PageHeader({ title, subtitle, actions }) {
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between"
-      alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mb: 2 }}>
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={2}
+      sx={{
+        justifyContent: "space-between",
+        alignItems: { xs: 'stretch', sm: 'center' },
+        mb: 2
+      }}>
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="h1" sx={{ overflowWrap: 'anywhere' }}>{title}</Typography>
-        {subtitle && <Typography color="text.secondary">{subtitle}</Typography>}
+        {subtitle && <Typography sx={{
+          color: "text.secondary"
+        }}>{subtitle}</Typography>}
       </Box>
       {actions && <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>{actions}</Stack>}
     </Stack>

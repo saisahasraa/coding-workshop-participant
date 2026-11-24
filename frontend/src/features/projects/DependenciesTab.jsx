@@ -10,6 +10,7 @@ import Typography from '@mui/material/Typography';
 import { fetchDependencies } from '../../api/resources';
 import useApi from '../../hooks/useApi';
 import DependencyGraph from './DependencyGraph';
+import ToneChip from '../../components/ToneChip';
 
 /** Waiting relationships as text: "WEB-4 waits for WEB-2, WEB-3". */
 function waitingList(nodes, edges) {
@@ -28,9 +29,10 @@ export default function DependenciesTab({ project }) {
   if (!data) return <LinearProgress aria-label="Loading dependencies" />;
   if (!data.edges.length) {
     return (
-      <Typography color="text.secondary">
-        No dependencies yet. Open a deliverable and link it under Linked work items (blocks / is blocked by) to see the chain here.
-      </Typography>
+      <Typography sx={{
+        color: "text.secondary"
+      }}>No dependencies yet. Open a deliverable and link it under Linked work items (blocks / is blocked by) to see the chain here.
+              </Typography>
     );
   }
   const own = data.nodes.filter((n) => !n.external);
@@ -39,12 +41,16 @@ export default function DependenciesTab({ project }) {
   return (
     <Stack spacing={2}>
       {loading && <LinearProgress aria-label="Refreshing" />}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Stack direction="row" spacing={1} useFlexGap sx={{
+        flexWrap: "wrap"
+      }}>
         <Chip variant="outlined" label={`${data.edges.length} dependenc${data.edges.length === 1 ? 'y' : 'ies'}`} />
         <Chip variant="outlined" label={`Longest chain: ${data.longest_chain} items`} />
-        <Chip variant="outlined" color="primary" label={`${ready} ready and blocking others`} />
+        <ToneChip tone="primary" label={`${ready} ready and blocking others`} />
       </Stack>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{
+        color: "text.secondary"
+      }}>
         Columns show how many blockers come before an item. Blue: ready to start. Red: waiting on unfinished work. Green: done. Dashed: another project.
       </Typography>
       <DependencyGraph nodes={data.nodes} edges={data.edges} />
@@ -54,7 +60,9 @@ export default function DependenciesTab({ project }) {
           {waiting.map(({ node, blockers }) => (
             <li key={node.key}>
               <Typography component="span">
-                <Link component={RouterLink} to={`/deliverables/${node.key}`} fontWeight={600} underline="hover">{node.key}</Link>
+                <Link component={RouterLink} to={`/deliverables/${node.key}`} underline="hover" sx={{
+                  fontWeight: 600
+                }}>{node.key}</Link>
                 {' '}waits for{' '}
                 {blockers.map((b, i) => (
                   <span key={b}>{i > 0 && ', '}<Link component={RouterLink} to={`/deliverables/${b}`} underline="hover">{b}</Link></span>

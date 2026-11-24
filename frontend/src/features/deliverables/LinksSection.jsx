@@ -64,14 +64,26 @@ export default function LinksSection({ deliverableKey, canEdit, onChanged }) {
 
   return (
     <Box component="section" aria-labelledby="links-heading">
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 1
+        }}>
         <Typography id="links-heading" variant="h3">Linked work items</Typography>
         {canEdit && !adding && <Button size="small" onClick={() => setAdding(true)}>Link work item</Button>}
       </Stack>
       {error && <Alert severity="error">{error.message}</Alert>}
       {adding && (
         <form onSubmit={submit}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }} alignItems={{ sm: 'flex-start' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{
+              alignItems: { sm: 'flex-start' },
+              mb: 2
+            }}>
             <TextField select label="Relationship" value={type} onChange={(e) => setType(e.target.value)} sx={{ minWidth: 170 }} fullWidth={false}>
               {GROUPS.map((g) => <MenuItem key={g.type} value={g.type}>{g.title}</MenuItem>)}
             </TextField>
@@ -82,18 +94,35 @@ export default function LinksSection({ deliverableKey, canEdit, onChanged }) {
           </Stack>
         </form>
       )}
-      {!links.length && !adding && <Typography color="text.secondary">No linked work items.</Typography>}
+      {!links.length && !adding && <Typography sx={{
+        color: "text.secondary"
+      }}>No linked work items.</Typography>}
       {GROUPS.map(({ type: groupType, title }) => {
         const items = links.filter((l) => l.type === groupType);
         if (!items.length) return null;
         return (
           <Box key={groupType} sx={{ mb: 1.5 }}>
-            <Typography variant="body2" color="text.secondary" gutterBottom>{title}</Typography>
+            <Typography variant="body2" gutterBottom sx={{
+              color: "text.secondary"
+            }}>{title}</Typography>
             <Stack spacing={0.5} component="ul" sx={{ p: 0, m: 0, listStyle: 'none' }}>
               {items.map((link) => (
-                <Stack key={link.id} component="li" direction="row" spacing={1} alignItems="center"
-                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 0.5 }}>
-                  <Link component={RouterLink} to={`/deliverables/${link.key}`} underline="hover" fontWeight={600}>{link.key}</Link>
+                <Stack
+                  key={link.id}
+                  component="li"
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: "center",
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    px: 1.5,
+                    py: 0.5
+                  }}>
+                  <Link component={RouterLink} to={`/deliverables/${link.key}`} underline="hover" sx={{
+                    fontWeight: 600
+                  }}>{link.key}</Link>
                   <Typography noWrap sx={{ flexGrow: 1, minWidth: 0 }}>{link.name}</Typography>
                   <StatusChip value={link.status} />
                   {canEdit && (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Autocomplete from '@mui/material/Autocomplete';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -17,7 +17,7 @@ function toOptions(result) {
   return [
     ...result.projects.map((p) => ({ group: 'projects', id: `p${p.id}`, label: p.key, detail: p.name, to: `/projects/${p.key}` })),
     ...result.deliverables.map((d) => ({ group: 'deliverables', id: `d${d.id}`, label: d.key, detail: d.name, to: `/deliverables/${d.key}` })),
-    ...result.people.map((u) => ({ group: 'people', id: `u${u.id}`, label: u.name, detail: u.job_title || labelize(u.role), to: `/deliverables?owner_id=${u.id}` })),
+    ...result.people.map((u) => ({ group: 'people', id: `u${u.id}`, label: u.name, detail: u.job_title || labelize(u.role), to: `/deliverables?person=${u.id}` })),
   ];
 }
 
@@ -27,6 +27,7 @@ export default function GlobalSearch() {
   const [text, setText] = useState('');
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
   const query = text.trim();
   const searchable = query.length >= MIN_LENGTH;
 
@@ -42,6 +43,19 @@ export default function GlobalSearch() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, searchable]);
 
+  // "/" jumps to search from anywhere, unless the person is already typing somewhere.
+  useEffect(() => {
+    const onKey = (event) => {
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable;
+      if (event.key === '/' && !typing && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <Autocomplete
       size="small"
@@ -56,23 +70,30 @@ export default function GlobalSearch() {
       getOptionLabel={(option) => `${option.label} ${option.detail}`}
       isOptionEqualToValue={(a, b) => a.id === b.id}
       noOptionsText={searchable ? 'Nothing found' : `Type at least ${MIN_LENGTH} characters`}
-      sx={{ width: { xs: 150, sm: 260, md: 360 }, mx: 1 }}
+      sx={{ width: '100%', maxWidth: 520 }}
       renderOption={({ key, ...props }, option) => (
         <li key={key} {...props}>
-          <Typography fontWeight={600} sx={{ mr: 1, whiteSpace: 'nowrap' }}>{option.label}</Typography>
-          <Typography color="text.secondary" noWrap>{option.detail}</Typography>
+          <Typography
+            sx={{
+              fontWeight: 600,
+              mr: 1,
+              whiteSpace: 'nowrap'
+            }}>{option.label}</Typography>
+          <Typography noWrap sx={{
+            color: "text.secondary"
+          }}>{option.detail}</Typography>
         </li>
       )}
       renderInput={(params) => (
         <TextField
           {...params}
-          placeholder="Search…"
+          placeholder="Search…  ( / )"
+          inputRef={inputRef}
           slotProps={{
             ...params.slotProps,
             htmlInput: { ...params.slotProps.htmlInput, 'aria-label': 'Search projects, deliverables and people' },
             input: { ...params.slotProps.input, startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> },
           }}
-          sx={{ bgcolor: 'background.default', borderRadius: 1 }}
         />
       )}
     />

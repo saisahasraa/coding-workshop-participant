@@ -30,10 +30,14 @@ export default function ProfilePage() {
           <Card><CardContent>
             <Stack spacing={1}>
               <Typography variant="h2">{user.name}</Typography>
-              <Typography color="text.secondary">{user.email}</Typography>
+              <Typography sx={{
+                color: "text.secondary"
+              }}>{user.email}</Typography>
               <div><StatusChip value={user.role} /></div>
               {user.job_title && <Typography>{user.job_title}</Typography>}
-              <Typography variant="body2" color="text.secondary">Weekly capacity: {user.weekly_capacity_hours} hours</Typography>
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>Weekly capacity: {user.weekly_capacity_hours} hours</Typography>
             </Stack>
             <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
               <Button variant="outlined" onClick={() => setDialog('name')}>Edit name</Button>
@@ -44,7 +48,11 @@ export default function ProfilePage() {
         <Grid size={{ xs: 12, md: 6 }}>
           <Card><CardContent>
             <Typography variant="h3" gutterBottom>Sessions</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>Signed in on a shared or lost device? Sign out everywhere, including here.</Typography>
+            <Typography
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>Signed in on a shared or lost device? Sign out everywhere, including here.</Typography>
             <Button color="error" variant="outlined" onClick={logoutAll}>Sign out everywhere</Button>
           </CardContent></Card>
         </Grid>

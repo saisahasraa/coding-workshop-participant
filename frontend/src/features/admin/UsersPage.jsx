@@ -24,6 +24,7 @@ import useListQuery from '../../hooks/useListQuery';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import { formatDate, labelize, toOptions } from '../../utils/format';
+import ToneChip from '../../components/ToneChip';
 
 function userFields(meta, isEdit, minPassword, teams) {
   return [
@@ -74,7 +75,7 @@ export default function UsersPage() {
     { field: 'team', headerName: 'Team', width: 150, valueGetter: (_v, row) => row.team_name || '—' },
     { field: 'job_title', headerName: 'Job title', width: 170, sortable: false },
     { field: 'is_active', headerName: 'Status', width: 110, sortable: false,
-      renderCell: ({ value }) => <Chip size="small" label={value ? 'Active' : 'Inactive'} color={value ? 'success' : 'default'} variant="outlined" /> },
+      renderCell: ({ value }) => <ToneChip tone={value ? 'success' : 'default'} label={value ? 'Active' : 'Inactive'} /> },
     { field: 'last_login_at', headerName: 'Last sign-in', width: 140, valueFormatter: (value) => formatDate(value) || 'Never' },
     { field: 'actions', headerName: '', width: 96, sortable: false, renderCell: ({ row }) => actions(row) },
   ];
@@ -113,8 +114,14 @@ export default function UsersPage() {
         emptyText="No users match these filters."
         renderCard={(row) => (
           <Stack spacing={0.5}>
-            <Stack direction="row" justifyContent="space-between"><Typography fontWeight={600}>{row.name}</Typography>{actions(row)}</Stack>
-            <Typography variant="body2" color="text.secondary">{row.email}</Typography>
+            <Stack direction="row" sx={{
+              justifyContent: "space-between"
+            }}><Typography sx={{
+              fontWeight: 600
+            }}>{row.name}</Typography>{actions(row)}</Stack>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{row.email}</Typography>
             <Stack direction="row" spacing={1}><StatusChip value={row.role} />{!row.is_active && <Chip size="small" label="Inactive" />}</Stack>
           </Stack>
         )}

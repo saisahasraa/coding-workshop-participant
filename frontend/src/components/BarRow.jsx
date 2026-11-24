@@ -15,7 +15,9 @@ export default function BarRow({ label, value, max, valueLabel, color = 'primary
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
         {name}
-        <Typography variant="body2" fontWeight={600}>{valueLabel ?? value}</Typography>
+        <Typography variant="body2" sx={{
+          fontWeight: 600
+        }}>{valueLabel ?? value}</Typography>
       </Box>
       <LinearProgress variant="determinate" value={pct} color={color} aria-label={`${label}: ${valueLabel ?? value}`}
         sx={{ height: 8, borderRadius: 4, mt: 0.5 }} />

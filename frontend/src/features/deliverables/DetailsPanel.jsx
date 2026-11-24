@@ -16,7 +16,9 @@ import { formatDate, labelize } from '../../utils/format';
 function Row({ label, children }) {
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '110px 1fr', md: '120px 1fr' }, gap: 1, alignItems: 'center', py: 0.75 }}>
-      <Typography variant="body2" color="text.secondary" component="div">{label}</Typography>
+      <Typography variant="body2" component="div" sx={{
+        color: "text.secondary"
+      }}>{label}</Typography>
       <Box sx={{ minWidth: 0 }}>{children}</Box>
     </Box>
   );
@@ -117,12 +119,20 @@ export default function DetailsPanel({ item, meta, people, onSave }) {
         <Editable label="Progress (%)" name="progress_pct" type="number" value={item.progress_pct} display={<ProgressCell value={item.progress_pct} />}
           editable={can('progress_pct')} min="0" max="100" onSave={onSave} />
         <Row label="Project">
-          <Link component={RouterLink} to={`/projects/${item.project_key}`} noWrap display="block">{item.project_key} · {item.project_name}</Link>
+          <Link component={RouterLink} to={`/projects/${item.project_key}`} noWrap sx={{
+            display: "block"
+          }}>{item.project_key} · {item.project_name}</Link>
         </Row>
         <Stack sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="body2" color="text.secondary">Created {formatDate(item.created_at)}</Typography>
-          <Typography variant="body2" color="text.secondary">Updated {formatDate(item.updated_at)}</Typography>
-          {item.completed_at && <Typography variant="body2" color="text.secondary">Completed {formatDate(item.completed_at)}</Typography>}
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>Created {formatDate(item.created_at)}</Typography>
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>Updated {formatDate(item.updated_at)}</Typography>
+          {item.completed_at && <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>Completed {formatDate(item.completed_at)}</Typography>}
         </Stack>
       </CardContent>
     </Card>

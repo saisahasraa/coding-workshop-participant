@@ -3,7 +3,6 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
 import LinearProgress from '@mui/material/LinearProgress';
 import Stack from '@mui/material/Stack';
@@ -12,17 +11,20 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import PropTypes from 'prop-types';
 import { getHealth } from '../../api/system';
 import useApi from '../../hooks/useApi';
+import ToneChip from '../../components/ToneChip';
 
 /** One labelled status tile. */
 function StatusTile({ label, value, ok }) {
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Typography variant="body2" color="text.secondary" gutterBottom>{label}</Typography>
+        <Typography variant="body2" gutterBottom sx={{
+          color: "text.secondary"
+        }}>{label}</Typography>
         {ok === undefined ? (
           <Typography variant="h3" component="p">{value}</Typography>
         ) : (
-          <Chip label={value} color={ok ? 'success' : 'error'} variant={ok ? 'filled' : 'outlined'} />
+          <ToneChip tone={ok ? 'success' : 'error'} label={value} />
         )}
       </CardContent>
     </Card>
@@ -43,10 +45,19 @@ export default function StatusPage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }} spacing={2}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 2
+        }}>
         <Box>
           <Typography variant="h1">System status</Typography>
-          <Typography color="text.secondary">Connectivity from this browser to the API and database.</Typography>
+          <Typography sx={{
+            color: "text.secondary"
+          }}>Connectivity from this browser to the API and database.</Typography>
         </Box>
         <Button variant="outlined" startIcon={<RefreshIcon />} onClick={reload} disabled={loading}>
           Refresh

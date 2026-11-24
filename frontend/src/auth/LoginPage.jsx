@@ -48,7 +48,11 @@ export default function LoginPage() {
       <Card sx={{ width: '100%', maxWidth: 400 }}>
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant="h1" gutterBottom>{DEFAULT_APP_NAME}</Typography>
-          <Typography color="text.secondary" sx={{ mb: 3 }}>Sign in to continue</Typography>
+          <Typography
+            sx={{
+              color: "text.secondary",
+              mb: 3
+            }}>Sign in to continue</Typography>
           <form onSubmit={handleSubmit} noValidate>
             <Stack spacing={2}>
               {failure && <Alert severity="error">{failure}</Alert>}

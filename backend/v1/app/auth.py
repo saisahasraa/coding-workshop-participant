@@ -17,7 +17,7 @@ from psycopg import sql
 
 from app import db, log, migrations
 from app.config import ENV, get_setting
-from app.http import ApiError, BadRequest, Request, Unauthorized, ValidationFailed, no_content, ok
+from app.http import ApiError, BadRequest, Request, Unauthorized, ValidationFailed, error_response, no_content, ok
 from app.passwords import hash_password, verify_password
 from app.validation import Field, validate_fields
 
@@ -113,7 +113,7 @@ def authenticate(request: Request) -> dict:
 
 def public_user(user: dict) -> dict:
     """User fields safe to return to clients."""
-    return {k: v for k, v in user.items() if k != "token_version"}
+    return {k: v for k, v in user.items() if k != "token_version" and not k.startswith("_")}
 
 
 # ---------------------------------------------------------------------------
@@ -145,18 +145,39 @@ ME_FIELDS = {
 }
 
 
+def _failed_login(request: Request, row: dict | None) -> dict:
+    """Count a failed sign-in and lock the account when there were too many in a row.
+
+    Returned (not raised), so the counter update is committed with the request.
+    """
+    logger.info("Login failed", extra={"fields": {"reason": "invalid_credentials"}})
+    if row is not None:
+        if row["failed_logins"] + 1 >= get_setting("auth.max_failed_logins"):
+            db.execute("UPDATE users SET failed_logins = 0, locked_until = now() + make_interval(mins => %s)"
+                       " WHERE id = %s", (get_setting("auth.lockout_minutes"), row["id"]))
+            logger.warning("Account locked after repeated failed sign-ins", extra={"fields": {"user_id": row["id"]}})
+        else:
+            db.execute("UPDATE users SET failed_logins = failed_logins + 1 WHERE id = %s", (row["id"],))
+    return error_response(401, "invalid_credentials", "Invalid email or password", request_id=request.request_id)
+
+
 def login(request: Request) -> dict:
-    """POST /auth/login: exchange email + password for tokens."""
+    """POST /auth/login: exchange email + password for tokens. Repeated failures lock the account for a while."""
     values = validate_fields(LOGIN_FIELDS, request.body)
-    row = db.fetch_one("SELECT id, password_hash, is_active FROM users WHERE email = %s",
-                       (values["email"].lower(),))
+    row = db.fetch_one("SELECT id, password_hash, is_active, failed_logins,"
+                       " GREATEST(ceil(extract(epoch FROM locked_until - now()) / 60), 0)::int AS locked_minutes"
+                       " FROM users WHERE email = %s", (values["email"].lower(),))
+    if row and row["locked_minutes"]:
+        wait = f"{row['locked_minutes']} minute(s)"
+        raise ApiError(429, "account_locked",
+                       f"Too many failed sign-ins. Try again in {wait}, or ask an admin to reset your password.")
     password_ok = verify_password(values["password"], row["password_hash"] if row else _DUMMY_HASH)
     if row is None or not password_ok:
-        logger.info("Login failed", extra={"fields": {"reason": "invalid_credentials"}})
-        raise Unauthorized("Invalid email or password", code="invalid_credentials")
+        return _failed_login(request, row)
     if not row["is_active"]:
         raise Unauthorized("Your account is deactivated", code="account_disabled")
-    db.execute("UPDATE users SET last_login_at = now() WHERE id = %s", (row["id"],))
+    db.execute("UPDATE users SET last_login_at = now(), failed_logins = 0, locked_until = NULL WHERE id = %s",
+               (row["id"],))
     user = load_user(row["id"])
     log.bind(user_id=user["id"])
     logger.info("Login succeeded")

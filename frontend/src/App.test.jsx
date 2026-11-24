@@ -91,6 +91,23 @@ describe('App routing and navigation', () => {
     expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByText('Projects')).toBeInTheDocument();
   });
 
+  it('switches between light and dark mode and remembers it', async () => {
+    server.use(...sessionHandlers('viewer'), projects(), summary());
+    renderWithApp(<App />, { guard: false });
+    await userEvent.click(await screen.findByRole('button', { name: 'Switch to dark mode' }));
+    expect(await screen.findByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument();
+    expect(document.documentElement).toHaveClass('dark');
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }));
+    expect(document.documentElement).toHaveClass('light');
+  });
+
+  it('groups the navigation into sections', async () => {
+    server.use(...sessionHandlers('admin'), projects(), summary());
+    renderWithApp(<App />, { guard: false });
+    const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
+    for (const section of ['Overview', 'Work', 'People', 'Money', 'Admin', 'System']) expect(within(nav).getByText(section)).toBeInTheDocument();
+  });
+
   it('shows a not-found page for unknown routes', async () => {
     server.use(...sessionHandlers('viewer'));
     renderWithApp(<App />, { guard: false, route: '/does-not-exist' });

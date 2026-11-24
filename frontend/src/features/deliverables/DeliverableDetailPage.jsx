@@ -80,7 +80,9 @@ export default function DeliverableDetailPage() {
       <Breadcrumbs sx={{ mb: 1 }}>
         <Link component={RouterLink} to="/projects" underline="hover">Projects</Link>
         <Link component={RouterLink} to={`/projects/${item.project_key}?tab=deliverables`} underline="hover">{item.project_key}</Link>
-        <Typography color="text.primary">{item.key}</Typography>
+        <Typography sx={{
+          color: "text.primary"
+        }}>{item.key}</Typography>
       </Breadcrumbs>
       {loading && <LinearProgress aria-label="Refreshing" sx={{ mb: 1 }} />}
 
@@ -88,7 +90,13 @@ export default function DeliverableDetailPage() {
         <Grid size={{ xs: 12, md: 8 }}>
           <Stack spacing={3}>
             <div>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: "center",
+                  mb: 0.5
+                }}>
                 <Chip size="small" label={item.key} variant="outlined" />
                 <StatusChip value={item.status} />
                 <StatusChip value={item.priority} />
@@ -97,7 +105,9 @@ export default function DeliverableDetailPage() {
                 placeholder="Untitled" onSave={(name) => save({ name: name || item.name })} />
             </div>
 
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{
+              flexWrap: "wrap"
+            }}>
               {canEdit('status') && item.status !== 'completed' && (
                 <Button variant="contained" color="success" startIcon={<CheckCircleOutlineIcon />} onClick={markComplete} disabled={completing}>
                   Mark complete

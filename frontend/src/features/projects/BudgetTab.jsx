@@ -34,7 +34,9 @@ function Slice({ label, amount, total, currency }) {
   const pct = total > 0 ? (amount / total) * 100 : 0;
   return (
     <div>
-      <Stack direction="row" justifyContent="space-between"><Typography variant="body2">{label}</Typography><Typography variant="body2">{formatMoney(amount, currency)}</Typography></Stack>
+      <Stack direction="row" sx={{
+        justifyContent: "space-between"
+      }}><Typography variant="body2">{label}</Typography><Typography variant="body2">{formatMoney(amount, currency)}</Typography></Stack>
       <LinearProgress variant="determinate" value={pct} aria-label={`${label}: ${Math.round(pct)}% of spending`} sx={{ height: 6, borderRadius: 3 }} />
     </div>
   );
@@ -49,18 +51,22 @@ function BurnVersusProgress({ burn, progress }) {
   const over = burn !== null && burn > 100;
   return (
     <Card sx={{ height: '100%' }}><CardContent>
-      <Typography variant="h3" gutterBottom>Spending vs progress</Typography>
-      <Stack spacing={1.5}>
-        <div>
-          <Stack direction="row" justifyContent="space-between"><Typography variant="body2">Budget spent</Typography><Typography variant="body2" color={over ? 'error' : 'inherit'}>{burn === null ? 'No budget planned' : `${burn}%`}</Typography></Stack>
-          <LinearProgress variant="determinate" value={Math.min(burn ?? 0, 100)} color={over ? 'error' : 'primary'} aria-label="Budget spent" sx={{ height: 8, borderRadius: 4 }} />
-        </div>
-        <div>
-          <Stack direction="row" justifyContent="space-between"><Typography variant="body2">Work complete</Typography><Typography variant="body2">{progress}%</Typography></Stack>
-          <LinearProgress variant="determinate" value={progress} color="success" aria-label="Work complete" sx={{ height: 8, borderRadius: 4 }} />
-        </div>
-      </Stack>
-    </CardContent></Card>
+        <Typography variant="h3" gutterBottom>Spending vs progress</Typography>
+        <Stack spacing={1.5}>
+          <div>
+            <Stack direction="row" sx={{
+              justifyContent: "space-between"
+            }}><Typography variant="body2">Budget spent</Typography><Typography variant="body2" color={over ? 'error' : 'inherit'}>{burn === null ? 'No budget planned' : `${burn}%`}</Typography></Stack>
+            <LinearProgress variant="determinate" value={Math.min(burn ?? 0, 100)} color={over ? 'error' : 'primary'} aria-label="Budget spent" sx={{ height: 8, borderRadius: 4 }} />
+          </div>
+          <div>
+            <Stack direction="row" sx={{
+              justifyContent: "space-between"
+            }}><Typography variant="body2">Work complete</Typography><Typography variant="body2">{progress}%</Typography></Stack>
+            <LinearProgress variant="determinate" value={progress} color="success" aria-label="Work complete" sx={{ height: 8, borderRadius: 4 }} />
+          </div>
+        </Stack>
+      </CardContent></Card>
   );
 }
 
@@ -123,7 +129,9 @@ export default function BudgetTab({ project, onChange }) {
             <Card sx={{ height: '100%' }}><CardContent>
               <Typography variant="h3" gutterBottom>By category</Typography>
               <Stack spacing={1.5}>
-                {report.data.by_category.length === 0 && <Typography color="text.secondary">Nothing spent yet.</Typography>}
+                {report.data.by_category.length === 0 && <Typography sx={{
+                  color: "text.secondary"
+                }}>Nothing spent yet.</Typography>}
                 {report.data.by_category.map((c) => <Slice key={c.category} label={labelize(c.category)} amount={c.amount} total={spentTotal} currency={currency} />)}
               </Stack>
             </CardContent></Card>
@@ -132,7 +140,9 @@ export default function BudgetTab({ project, onChange }) {
             <Card sx={{ height: '100%' }}><CardContent>
               <Typography variant="h3" gutterBottom>By month</Typography>
               <Stack spacing={1.5}>
-                {report.data.by_month.length === 0 && <Typography color="text.secondary">Nothing spent yet.</Typography>}
+                {report.data.by_month.length === 0 && <Typography sx={{
+                  color: "text.secondary"
+                }}>Nothing spent yet.</Typography>}
                 {report.data.by_month.map((m) => <Slice key={m.month} label={m.month} amount={m.amount} total={spentTotal} currency={currency} />)}
               </Stack>
             </CardContent></Card>
@@ -140,7 +150,13 @@ export default function BudgetTab({ project, onChange }) {
         </Grid>
       )}
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} justifyContent="space-between">
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{
+          alignItems: { sm: 'center' },
+          justifyContent: "space-between"
+        }}>
         <TextField select label="Category" value={list.values.category} onChange={(e) => list.setFilter('category', e.target.value)} sx={{ minWidth: 180 }} fullWidth={false}>
           <MenuItem value="">All categories</MenuItem>
           {categories.map((c) => <MenuItem key={c} value={c}>{labelize(c)}</MenuItem>)}
@@ -155,11 +171,22 @@ export default function BudgetTab({ project, onChange }) {
         emptyText="No expenses recorded."
         renderCard={(row) => (
           <Stack spacing={0.5}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Typography fontWeight={600}>{formatMoney(Number(row.amount), currency)}</Typography>
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
+              <Typography sx={{
+                fontWeight: 600
+              }}>{formatMoney(Number(row.amount), currency)}</Typography>
               {actions(row)}
             </Stack>
-            <Stack direction="row" spacing={1} alignItems="center"><StatusChip value={row.category} /><Typography variant="body2" color="text.secondary">{formatDate(row.spent_on)}</Typography></Stack>
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: "center"
+            }}><StatusChip value={row.category} /><Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{formatDate(row.spent_on)}</Typography></Stack>
             {row.description && <Typography variant="body2">{row.description}</Typography>}
           </Stack>
         )}

@@ -22,7 +22,7 @@ export default function SearchField({
       value={text}
       onChange={(e) => setText(e.target.value)}
       type="search"
-      sx={{ minWidth: { sm: 260 } }}
+      sx={{ minWidth: { sm: 220 }, maxWidth: { md: 380 } }}
       slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> } }}
     />
   );

@@ -51,6 +51,9 @@ class Env:
     admin_email: str
     admin_password: str
     app_version: str
+    attachments_bucket: str
+    s3_public_endpoint: str
+    notify_from_email: str
 
     @property
     def environment(self) -> str:
@@ -73,6 +76,9 @@ def load_env() -> Env:
         admin_email=os.getenv("ADMIN_EMAIL", ""),
         admin_password=os.getenv("ADMIN_PASSWORD", ""),
         app_version=os.getenv("APP_VERSION", "0.1.0"),
+        attachments_bucket=os.getenv("ATTACHMENTS_BUCKET", ""),
+        s3_public_endpoint=os.getenv("S3_PUBLIC_ENDPOINT", ""),
+        notify_from_email=os.getenv("NOTIFY_FROM_EMAIL", ""),
     )
 
 
@@ -158,11 +164,25 @@ SETTINGS: dict[str, Setting] = {
         Setting("auth.access_token_minutes", "int", 15, "Lifetime of access tokens", minimum=1, maximum=1440),
         Setting("auth.refresh_token_days", "int", 7, "Lifetime of refresh tokens (how long a session lasts)",
                 minimum=1, maximum=90),
+        Setting("auth.max_failed_logins", "int", 5, "Failed sign-ins in a row before the account is locked",
+                minimum=3, maximum=50),
+        Setting("auth.lockout_minutes", "int", 15, "How long an account stays locked after too many failed sign-ins",
+                minimum=1, maximum=1440),
         Setting("auth.password_min_length", "int", 8, "Minimum password length for new passwords",
                 minimum=8, maximum=128, public=True),
         Setting("projects.default_visibility", "choice", "everyone",
                 "Who can see projects whose visibility is 'inherit': everyone, or only project members",
                 choices=("everyone", "members"), public=True),
+        Setting("projects.default_edit_access", "choice", "everyone",
+                "Who may add and edit deliverables in projects set to 'inherit': everyone except viewers, or members",
+                choices=("everyone", "members"), public=True),
+        Setting("projects.default_comment_access", "choice", "everyone",
+                "Who may comment and attach files in projects set to 'inherit': everyone except viewers, or members",
+                choices=("everyone", "members"), public=True),
+        Setting("attachments.max_size_mb", "int", 10, "Largest file that can be attached to a comment (MB)",
+                minimum=1, maximum=100, public=True),
+        Setting("notifications.email_enabled", "bool", False,
+                "Also send notifications by email (needs SES access and NOTIFY_FROM_EMAIL)"),
         Setting("capacity.default_weekly_hours", "int", 40, "Weekly capacity given to new users",
                 minimum=0, maximum=168, public=True),
         Setting("budget.currency", "str", "USD", "Currency code used for all amounts", public=True),

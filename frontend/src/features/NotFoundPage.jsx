@@ -6,9 +6,13 @@ import Typography from '@mui/material/Typography';
 /** Shown for unknown client-side routes. */
 export default function NotFoundPage() {
   return (
-    <Stack spacing={2} alignItems="flex-start">
+    <Stack spacing={2} sx={{
+      alignItems: "flex-start"
+    }}>
       <Typography variant="h1">Page not found</Typography>
-      <Typography color="text.secondary">The page you are looking for does not exist or has moved.</Typography>
+      <Typography sx={{
+        color: "text.secondary"
+      }}>The page you are looking for does not exist or has moved.</Typography>
       <Button variant="contained" component={RouterLink} to="/">Go to home</Button>
     </Stack>
   );

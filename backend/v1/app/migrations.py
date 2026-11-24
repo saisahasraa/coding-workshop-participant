@@ -257,6 +257,52 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX idx_expenses_project ON expenses (project_id, spent_on);
         """,
     ),
+    (
+        7,
+        "sign-in lockout counters",
+        """
+        ALTER TABLE users ADD COLUMN failed_logins INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN locked_until TIMESTAMPTZ;
+        """,
+    ),
+    (
+        8,
+        "project access switches, comment mentions, attachments, notifications",
+        """
+        ALTER TABLE projects ADD COLUMN edit_access VARCHAR(10) NOT NULL DEFAULT 'inherit'
+            CHECK (edit_access IN ('inherit', 'members', 'everyone'));
+        ALTER TABLE projects ADD COLUMN comment_access VARCHAR(10) NOT NULL DEFAULT 'inherit'
+            CHECK (comment_access IN ('inherit', 'members', 'everyone'));
+
+        ALTER TABLE comments ADD COLUMN mentions BIGINT[] NOT NULL DEFAULT '{}';
+
+        CREATE TABLE attachments (
+            id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            deliverable_id BIGINT NOT NULL REFERENCES deliverables (id) ON DELETE CASCADE,
+            comment_id     BIGINT REFERENCES comments (id) ON DELETE SET NULL,
+            uploader_id    BIGINT REFERENCES users (id) ON DELETE SET NULL,
+            filename       VARCHAR(255) NOT NULL,
+            content_type   VARCHAR(150) NOT NULL,
+            size_bytes     BIGINT NOT NULL CHECK (size_bytes > 0),
+            storage_key    TEXT NOT NULL UNIQUE,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX idx_attachments_deliverable ON attachments (deliverable_id);
+
+        CREATE TABLE notifications (
+            id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            user_id        BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            actor_id       BIGINT REFERENCES users (id) ON DELETE SET NULL,
+            kind           VARCHAR(30) NOT NULL,
+            message        TEXT NOT NULL,
+            link           TEXT,
+            read_at        TIMESTAMPTZ,
+            emailed_at     TIMESTAMPTZ,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX idx_notifications_user ON notifications (user_id, created_at DESC);
+        """,
+    ),
 ]
 
 _current_version: int | None = None

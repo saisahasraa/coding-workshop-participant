@@ -4,6 +4,11 @@ The goal of this coding workshop is to enable and assess the hands-on skills
 of participants through development of a practical technical solution that
 solves a theoretical business problem.
 
+## Solution: ACME Project Tracker
+
+This fork contains a complete solution. Start with the [solution guide](./SOLUTION.md): what was built,
+how to run and test it, demo accounts, the API and the design decisions.
+
 ## Getting Started
 
 Navigate to [Coding Workshop - Main Guide](./docs/README.md) to get started.

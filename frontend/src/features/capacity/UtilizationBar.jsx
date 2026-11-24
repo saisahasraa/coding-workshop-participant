@@ -6,7 +6,11 @@ import Typography from '@mui/material/Typography';
 /** Utilization as a bar and percentage; red when over-allocated, grey when there is no availability. */
 export default function UtilizationBar({ value, over, unit = 'utilized' }) {
   if (value === null || value === undefined) {
-    return <Typography variant="body2" color="text.secondary">{over ? 'No availability' : '—'}</Typography>;
+    return (
+      <Typography variant="body2" sx={{
+        color: "text.secondary"
+      }}>{over ? 'No availability' : '—'}</Typography>
+    );
   }
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

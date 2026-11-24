@@ -76,7 +76,7 @@ class Resource:  # pylint: disable=too-many-instance-attributes
     before_delete: Callable[[Request, dict], None] | None = None
     resolve: Callable[[str], int] | None = None  # maps a path segment (e.g. a key like ENG-12) to an id
     read_only: bool = False  # only the two GET routes exist (e.g. the audit log)
-    after_write: Callable[[WriteContext, int], None] | None = None  # runs after an update is saved
+    after_write: Callable[[WriteContext, int], None] | None = None  # runs after a create or update is saved
     computed: Callable[[dict], dict] | None = None  # derives extra fields from a row for the API shape
 
     @property
@@ -297,6 +297,8 @@ def create_record(resource: Resource, request: Request) -> dict:
     resource.policy.check_create(user, ctx.values)
     record_id = _write(resource, ctx.values)
     audit.record(request, "create", resource.table, record_id, {"after": ctx.values})
+    if resource.after_write:
+        resource.after_write(ctx, record_id)
     return created(represent(resource, user, fetch(resource, user, record_id)))
 
 

@@ -6,7 +6,21 @@ import logging
 
 import psycopg
 
-from app import admin, auth, budget, capacity, collab, crud, dashboard, db, dependencies, migrations, search
+from app import (
+    admin,
+    attachments,
+    auth,
+    budget,
+    capacity,
+    collab,
+    crud,
+    dashboard,
+    db,
+    dependencies,
+    migrations,
+    notify,
+    search,
+)
 from app.config import ENV
 from app.http import Request, ok, response, router
 from app.resources import RESOURCES
@@ -59,6 +73,16 @@ router.add("DELETE", "/comments/{comment_id}", collab.delete_comment)
 router.add("GET", "/deliverables/{id}/links", collab.list_links)
 router.add("POST", "/deliverables/{id}/links", collab.add_link)
 router.add("DELETE", "/deliverables/{id}/links/{link_id}", collab.delete_link)
+
+# Attachments (files go straight to S3 through signed links)
+router.add("GET", "/deliverables/{id}/attachments", attachments.list_attachments)
+router.add("POST", "/deliverables/{id}/attachments", attachments.create_attachment)
+router.add("GET", "/attachments/{attachment_id}/download", attachments.download)
+router.add("DELETE", "/attachments/{attachment_id}", attachments.delete_attachment)
+
+# Notifications
+router.add("GET", "/notifications", notify.list_mine)
+router.add("POST", "/notifications/read", notify.mark_read)
 
 # Search
 router.add("GET", "/search", lambda request: ok(search.search(request.user, request.query)))

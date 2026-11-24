@@ -7,13 +7,22 @@ can see the deliverable (``/deliverables/ENG-12/comments``).
 
 from __future__ import annotations
 
+import re
+
 from psycopg import sql
 
-from app import audit, db
+from app import audit, db, notify
 from app.crud import fetch, record_id_from
 from app.http import Conflict, Forbidden, NotFound, Request, ValidationFailed, created, no_content, ok
-from app.rbac import PROJECT_MANAGER, VIEWER, has_role, is_admin
-from app.resources import DELIVERABLES, block_waiting, project_visibility, release_unblocked
+from app.rbac import PROJECT_MANAGER, has_role, is_admin
+from app.resources import (
+    DELIVERABLES,
+    block_waiting,
+    can_contribute,
+    deliverable_ref,
+    project_visibility,
+    release_unblocked,
+)
 from app.validation import Field, parse_id, validate_fields
 
 
@@ -31,12 +40,28 @@ def _manages(user: dict, deliverable: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 COMMENT_FIELDS = {"body": Field("string", required=True, nullable=False, max_len=5000)}
+MAX_MENTIONS = 20
+ATTACHMENT_MARK = re.compile(r"\(attachment:(\d+)\)")
 
 _COMMENT_SELECT = sql.SQL(
     "SELECT c.id, c.deliverable_id, c.author_id, u.name AS author_name, c.body, c.created_at, c.updated_at,"
-    " c.updated_at > c.created_at + interval '1 second' AS edited"
+    " c.updated_at > c.created_at + interval '1 second' AS edited,"
+    " COALESCE((SELECT json_agg(json_build_object('id', m.id, 'name', m.name) ORDER BY m.name)"
+    "             FROM users m WHERE m.id = ANY(c.mentions)), '[]'::json) AS mentions"
     " FROM comments c JOIN users u ON u.id = c.author_id"
 )
+
+
+def can_comment(user: dict, deliverable: dict) -> bool:
+    """Whether the user may comment and attach files on this deliverable (the project's comment access)."""
+    return can_contribute(user, deliverable["project_id"], deliverable["project_comment_access"],
+                          "projects.default_comment_access") or _manages(user, deliverable)
+
+
+def _require_comment_access(user: dict, deliverable: dict) -> None:
+    if not can_comment(user, deliverable):
+        raise Forbidden("Viewers cannot comment" if user["role"] == "viewer"
+                        else "Only members of this project can comment here")
 
 
 def _comment_view(user: dict, deliverable: dict, row: dict) -> dict:
@@ -44,29 +69,58 @@ def _comment_view(user: dict, deliverable: dict, row: dict) -> dict:
     return {**row, "permissions": {"update": mine, "delete": mine or _manages(user, deliverable)}}
 
 
+def _parse_comment(body: object) -> tuple[str, list[int]]:
+    """Validate ``{"body": ..., "mentions": [user ids]}`` and return the text and the mentioned active users."""
+    raw = body if isinstance(body, dict) else {}
+    text = validate_fields(COMMENT_FIELDS, {k: v for k, v in raw.items() if k != "mentions"})["body"]
+    mentions = raw.get("mentions", [])
+    if (not isinstance(mentions, list) or len(mentions) > MAX_MENTIONS
+            or any(isinstance(m, bool) or not isinstance(m, int) for m in mentions)):
+        raise ValidationFailed({"mentions": f"must be a list of at most {MAX_MENTIONS} user ids"})
+    rows = db.fetch_all("SELECT id FROM users WHERE id = ANY(%s) AND is_active", (mentions,))
+    return text, sorted(r["id"] for r in rows)
+
+
+def _claim_attachments(deliverable_id: int, comment_id: int, text: str) -> None:
+    """Files referenced in the text (``(attachment:ID)``) now belong to this comment."""
+    ids = [int(i) for i in ATTACHMENT_MARK.findall(text)]
+    if ids:
+        db.execute("UPDATE attachments SET comment_id = %s WHERE id = ANY(%s) AND deliverable_id = %s",
+                   (comment_id, ids, deliverable_id))
+
+
 def list_comments(request: Request) -> dict:
-    """GET /deliverables/{id}/comments: oldest first, like a conversation."""
+    """GET /deliverables/{id}/comments: oldest first, like a conversation; says whether the caller may add one."""
     deliverable = _deliverable(request)
     rows = db.fetch_all(_COMMENT_SELECT + sql.SQL(" WHERE c.deliverable_id = %s ORDER BY c.created_at, c.id LIMIT 500"),
                         (deliverable["id"],))
-    return ok({"data": [_comment_view(request.user, deliverable, r) for r in rows], "total": len(rows)})
+    return ok({"data": [_comment_view(request.user, deliverable, r) for r in rows], "total": len(rows),
+               "can_comment": can_comment(request.user, deliverable)})
 
 
 def add_comment(request: Request) -> dict:
-    """POST /deliverables/{id}/comments: anyone who can see the deliverable, except viewers."""
+    """POST /deliverables/{id}/comments: whoever the project's comment access allows. Mentions notify people."""
     deliverable = _deliverable(request)
-    if has_role(request.user, VIEWER):
-        raise Forbidden("Viewers cannot comment")
-    values = validate_fields(COMMENT_FIELDS, request.body)
-    row = db.fetch_one("INSERT INTO comments (deliverable_id, author_id, body) VALUES (%s, %s, %s) RETURNING id",
-                       (deliverable["id"], request.user["id"], values["body"]))
+    _require_comment_access(request.user, deliverable)
+    text, mentions = _parse_comment(request.body)
+    row = db.fetch_one("INSERT INTO comments (deliverable_id, author_id, body, mentions) VALUES (%s, %s, %s, %s)"
+                       " RETURNING id", (deliverable["id"], request.user["id"], text, mentions))
+    _claim_attachments(deliverable["id"], row["id"], text)
     audit.record(request, "create", "comments", row["id"], {"deliverable_id": deliverable["id"]})
+
+    ref, actor = deliverable_ref(deliverable["id"]), request.user["name"]
+    earlier = db.fetch_all("SELECT DISTINCT author_id FROM comments WHERE deliverable_id = %s", (deliverable["id"],))
+    notify.push(request, mentions, "mention", f"{actor} mentioned you on {ref['title']}", ref["link"])
+    notify.push(request, (ref["audience"] | {c["author_id"] for c in earlier}) - set(mentions), "comment",
+                f"{actor} commented on {ref['title']}", ref["link"])
     comment = db.fetch_one(_COMMENT_SELECT + sql.SQL(" WHERE c.id = %s"), (row["id"],))
     return created(_comment_view(request.user, deliverable, comment))
 
 
 def _comment_for(request: Request) -> tuple[dict, dict]:
-    comment = db.fetch_one(_COMMENT_SELECT + sql.SQL(" WHERE c.id = %s"), (parse_id(request.params["comment_id"]),))
+    comment = db.fetch_one(
+        sql.SQL("SELECT x.*, c.mentions AS mention_ids FROM ({}) x JOIN comments c ON c.id = x.id WHERE x.id = %s")
+        .format(_COMMENT_SELECT), (parse_id(request.params["comment_id"]),))
     if comment is None:
         raise NotFound("Comment not found")
     try:
@@ -77,14 +131,18 @@ def _comment_for(request: Request) -> tuple[dict, dict]:
 
 
 def update_comment(request: Request) -> dict:
-    """PUT /comments/{comment_id}: authors edit their own comments."""
+    """PUT /comments/{comment_id}: authors edit their own comments; newly mentioned people are told."""
     comment, deliverable = _comment_for(request)
     if comment["author_id"] != request.user["id"]:
         raise Forbidden("Only the author can edit a comment")
-    values = validate_fields(COMMENT_FIELDS, request.body)
-    db.execute("UPDATE comments SET body = %s, updated_at = now() WHERE id = %s", (values["body"], comment["id"]))
-    audit.record(request, "update", "comments", comment["id"],
-                 {"body": {"from": comment["body"], "to": values["body"]}})
+    text, mentions = _parse_comment(request.body)
+    db.execute("UPDATE comments SET body = %s, mentions = %s, updated_at = now() WHERE id = %s",
+               (text, mentions, comment["id"]))
+    _claim_attachments(deliverable["id"], comment["id"], text)
+    audit.record(request, "update", "comments", comment["id"], {"body": {"from": comment["body"], "to": text}})
+    ref = deliverable_ref(deliverable["id"])
+    notify.push(request, set(mentions) - set(comment["mention_ids"]), "mention",
+                f"{request.user['name']} mentioned you on {ref['title']}", ref["link"])
     fresh = db.fetch_one(_COMMENT_SELECT + sql.SQL(" WHERE c.id = %s"), (comment["id"],))
     return ok(_comment_view(request.user, deliverable, fresh))
 

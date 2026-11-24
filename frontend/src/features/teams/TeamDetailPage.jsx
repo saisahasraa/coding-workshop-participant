@@ -6,7 +6,6 @@ import Breadcrumbs from '@mui/material/Breadcrumbs';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
@@ -35,6 +34,7 @@ import { formatDate } from '../../utils/format';
 import leaveFields from '../leave/leaveFields';
 import leaveLength from '../leave/leaveLength';
 import UtilizationBar from '../capacity/UtilizationBar';
+import ToneChip from '../../components/ToneChip';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -77,7 +77,9 @@ export default function TeamDetailPage() {
     <>
       <Breadcrumbs sx={{ mb: 1 }}>
         <Link component={RouterLink} to="/teams" underline="hover">Teams</Link>
-        <Typography color="text.primary">{t.name}</Typography>
+        <Typography sx={{
+          color: "text.primary"
+        }}>{t.name}</Typography>
       </Breadcrumbs>
       <PageHeader
         title={t.name}
@@ -89,7 +91,9 @@ export default function TeamDetailPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h3" gutterBottom>Members{window && <Typography component="span" variant="body2" color="text.secondary"> · availability {window}</Typography>}</Typography>
+          <Typography variant="h3" gutterBottom>Members{window && <Typography component="span" variant="body2" sx={{
+            color: "text.secondary"
+          }}> · availability {window}</Typography>}</Typography>
           {(members.loading || capacity.loading) && <LinearProgress aria-label="Loading members" sx={{ mb: 1 }} />}
           <TableContainer>
             <Table size="small" aria-label="Team members">
@@ -107,17 +111,23 @@ export default function TeamDetailPage() {
                   return (
                     <TableRow key={m.id} hover>
                       <TableCell>
-                        <Typography fontWeight={600}>{m.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">{m.job_title || m.role.replace('_', ' ')}</Typography>
+                        <Typography sx={{
+                          fontWeight: 600
+                        }}>{m.name}</Typography>
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>{m.job_title || m.role.replace('_', ' ')}</Typography>
                       </TableCell>
                       <TableCell align="right">{m.weekly_capacity_hours}</TableCell>
                       <TableCell align="right">{f ? f.available_hours : '—'}</TableCell>
                       <TableCell align="right">{f ? f.allocated_hours : '—'}</TableCell>
                       <TableCell>
                         {f && (
-                          <Stack direction="row" spacing={1} alignItems="center">
+                          <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                          }}>
                             <Box sx={{ flexGrow: 1 }}><UtilizationBar value={f.utilization_pct} over={f.over_allocated} /></Box>
-                            {f.over_allocated && <Chip size="small" color="error" label="Over" />}
+                            {f.over_allocated && <ToneChip tone="error" label="Over" />}
                           </Stack>
                         )}
                       </TableCell>
@@ -132,7 +142,9 @@ export default function TeamDetailPage() {
                   );
                 })}
                 {members.data && !members.data.data.length && (
-                  <TableRow><TableCell colSpan={6}><Typography color="text.secondary">No members yet. Admins assign people to teams from the Users page.</Typography></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}><Typography sx={{
+                    color: "text.secondary"
+                  }}>No members yet. Admins assign people to teams from the Users page.</Typography></TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -143,11 +155,29 @@ export default function TeamDetailPage() {
       <Card>
         <CardContent>
           <Typography variant="h3" gutterBottom>Upcoming leave</Typography>
-          {leaves.data && !leaves.data.data.length && <Typography color="text.secondary">No upcoming leave.</Typography>}
+          {leaves.data && !leaves.data.data.length && <Typography sx={{
+            color: "text.secondary"
+          }}>No upcoming leave.</Typography>}
           <Stack spacing={1} component="ul" sx={{ p: 0, m: 0, listStyle: 'none' }}>
             {(leaves.data?.data || []).map((leave) => (
-              <Stack key={leave.id} component="li" direction="row" spacing={1.5} alignItems="center" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, px: 1.5, py: 0.75 }}>
-                <Typography fontWeight={600} sx={{ minWidth: 130 }}>{leave.user_name}</Typography>
+              <Stack
+                key={leave.id}
+                component="li"
+                direction="row"
+                spacing={1.5}
+                sx={{
+                  alignItems: "center",
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  px: 1.5,
+                  py: 0.75
+                }}>
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    minWidth: 130
+                  }}>{leave.user_name}</Typography>
                 <StatusChip value={leave.type} />
                 <Typography sx={{ flexGrow: 1 }}>{formatDate(leave.start_date)} – {formatDate(leave.end_date)} · {leaveLength(leave)} day(s)</Typography>
                 {leave.permissions.update && <IconButton size="small" aria-label={`Edit leave of ${leave.user_name}`} onClick={() => setLeaveDialog(leave)}><EditOutlinedIcon fontSize="small" /></IconButton>}

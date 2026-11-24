@@ -26,25 +26,32 @@ import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { formatDate } from '../../utils/format';
 import UtilizationBar from './UtilizationBar';
+import ToneChip from '../../components/ToneChip';
 
 const FILTERS = ['from', 'to', 'team_id', 'department_id'];
 
 function Status({ row }) {
-  if (row.over_allocated) return <Chip size="small" color="error" label="Over-allocated" />;
+  if (row.over_allocated) return <ToneChip tone="error" label="Over-allocated" />;
   if (row.available_hours === 0) return <Chip size="small" variant="outlined" label="No availability" />;
-  return <Chip size="small" color="success" variant="outlined" label={`${Math.max(row.free_hours, 0)} h free`} />;
+  return <ToneChip tone="success" label={`${Math.max(row.free_hours, 0)} h free`} />;
 }
 
 Status.propTypes = { row: PropTypes.object.isRequired };
 
 function Projects({ row }) {
-  if (!row.projects.length && !row.uncounted_count) return <Typography variant="body2" color="text.secondary">No assigned work</Typography>;
+  if (!row.projects.length && !row.uncounted_count) return (
+    <Typography variant="body2" sx={{
+      color: "text.secondary"
+    }}>No assigned work</Typography>
+  );
   return (
-    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+    <Stack direction="row" spacing={0.5} useFlexGap sx={{
+      flexWrap: "wrap"
+    }}>
       {row.projects.map((p) => <Chip key={p.project_id ?? 'other'} size="small" variant="outlined" label={`${p.key || 'Other'} · ${p.hours} h`} />)}
       {row.uncounted_count > 0 && (
         <Tooltip title="Open deliverables without an estimate or a due date cannot be counted. Add both to include them.">
-          <Chip size="small" color="warning" variant="outlined" label={`${row.uncounted_count} not counted`} />
+          <ToneChip tone="warning" label={`${row.uncounted_count} not counted`} />
         </Tooltip>
       )}
     </Stack>
@@ -113,18 +120,31 @@ export default function CapacityPage() {
         </Grid>
       )}
 
-      {data && !rows.length && <Typography color="text.secondary">No one matches these filters.</Typography>}
+      {data && !rows.length && <Typography sx={{
+        color: "text.secondary"
+      }}>No one matches these filters.</Typography>}
       {isMobile ? (
         <Stack spacing={1.5} component="ul" sx={{ p: 0, m: 0, listStyle: 'none' }}>
           {rows.map((row) => (
             <Card key={row.user_id} component="li"><CardContent>
               <Stack spacing={1}>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                  <div><Typography fontWeight={600}>{row.name}</Typography><Typography variant="body2" color="text.secondary">{row.team_name || 'No team'}</Typography></div>
+                <Stack
+                  direction="row"
+                  sx={{
+                    justifyContent: "space-between",
+                    alignItems: "flex-start"
+                  }}>
+                  <div><Typography sx={{
+                    fontWeight: 600
+                  }}>{row.name}</Typography><Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>{row.team_name || 'No team'}</Typography></div>
                   <Status row={row} />
                 </Stack>
                 <UtilizationBar value={row.utilization_pct} over={row.over_allocated} />
-                <Typography variant="body2" color="text.secondary">{row.allocated_hours} of {row.available_hours} h available{row.leave_days ? ` · ${row.leave_days} leave day(s)` : ''}</Typography>
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>{row.allocated_hours} of {row.available_hours} h available{row.leave_days ? ` · ${row.leave_days} leave day(s)` : ''}</Typography>
                 <Projects row={row} />
               </Stack>
             </CardContent></Card>
@@ -145,7 +165,11 @@ export default function CapacityPage() {
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.user_id} hover>
-                      <TableCell><Typography fontWeight={600}>{row.name}</Typography><Typography variant="body2" color="text.secondary">{row.team_name || 'No team'}</Typography></TableCell>
+                      <TableCell><Typography sx={{
+                        fontWeight: 600
+                      }}>{row.name}</Typography><Typography variant="body2" sx={{
+                        color: "text.secondary"
+                      }}>{row.team_name || 'No team'}</Typography></TableCell>
                       <TableCell align="right">{row.capacity_hours}</TableCell>
                       <TableCell align="right">{row.leave_hours}</TableCell>
                       <TableCell align="right">{row.available_hours}</TableCell>

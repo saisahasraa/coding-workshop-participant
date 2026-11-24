@@ -42,12 +42,23 @@ describe('Global search', () => {
     expect(box).toHaveValue('');
   });
 
-  it.each([['Payments platform', '/projects/PAY'], ['Backend Engineer', '/deliverables?owner_id=5']])('opens %s', async (text, path) => {
+  it.each([['Payments platform', '/projects/PAY'], ['Backend Engineer', '/deliverables?person=5']])('opens %s', async (text, path) => {
     server.use(...sessionHandlers('viewer'), http.get(apiUrl('/search'), () => HttpResponse.json(SEARCH)));
     renderWithApp(app());
     await userEvent.type(await screen.findByRole('combobox'), 'pay');
     await userEvent.click(await screen.findByText(text));
     expect(await screen.findByText(`at ${path}`)).toBeInTheDocument();
+  });
+
+  it('jumps to the search box with the / key', async () => {
+    server.use(...sessionHandlers('viewer'));
+    renderWithApp(app());
+    const box = await screen.findByRole('combobox');
+    expect(box).not.toHaveFocus();
+    await userEvent.keyboard('/');
+    expect(box).toHaveFocus();
+    await userEvent.keyboard('a/b');
+    expect(box).toHaveValue('a/b');                               // typing a slash inside a field is just a slash
   });
 
   it('says when nothing matches or the search fails', async () => {

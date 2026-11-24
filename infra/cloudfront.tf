@@ -94,6 +94,9 @@ resource "aws_cloudfront_distribution" "this" {
     target_origin_id       = local.origin_id
     viewer_protocol_policy = "redirect-to-https"
 
+    # AWS managed "SecurityHeadersPolicy": HSTS, nosniff, frame options and referrer policy on the app shell.
+    response_headers_policy_id = "67f7725c-6f97-4210-82d7-5512b31e9d03"
+
     function_association {
       event_type   = "viewer-request"
       function_arn = element(aws_cloudfront_function.spa_rewrite.*.arn, count.index)

@@ -13,3 +13,6 @@ export const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS
 
 /** Fallback application name until runtime settings are loaded. */
 export const DEFAULT_APP_NAME = 'ACME Project Tracker';
+
+/** localStorage key remembering the colour mode (light, dark or system). */
+export const COLOR_MODE_KEY = 'acme.colorMode';

@@ -371,7 +371,10 @@ def dispatch(event: dict | None, context: Any = None) -> dict:
         logger.exception("Unhandled error")
         result = error_response(500, "internal_error", "Internal server error", request_id=request_id)
 
-    result.setdefault("headers", {})["X-Request-Id"] = request_id
+    headers = result.setdefault("headers", {})
+    headers["X-Request-Id"] = request_id
+    headers.setdefault("Cache-Control", "no-store")  # API answers are per-user: never cache them
+    headers.setdefault("X-Content-Type-Options", "nosniff")
     status = result["statusCode"]
     logger.log(
         logging.ERROR if status >= 500 else logging.INFO,

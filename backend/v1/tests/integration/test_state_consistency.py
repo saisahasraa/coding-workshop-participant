@@ -138,3 +138,12 @@ def test_a_team_loses_its_lead_when_the_lead_stops_being_one(call, org, team):
     assert call("GET", f"/teams/{team['id']}", token=admin)[1]["lead_id"] is None
     entries = db.fetch_all("SELECT changes FROM audit_log WHERE entity = 'teams' AND action = 'update'")
     assert entries and entries[-1]["changes"]["lead_id"]["to"] is None
+
+
+def test_unassigned_filter(call, org, project):
+    _item(call, org, project, owner_id=org["team_member"]["id"])
+    orphan = _item(call, org, project)
+    token = org["viewer"]["token"]
+    unowned = call("GET", "/deliverables", query={"unassigned": "true"}, token=token)[1]["data"]
+    assert [d["key"] for d in unowned] == [orphan["key"]]
+    assert call("GET", "/deliverables", query={"unassigned": "false"}, token=token)[1]["total"] == 1

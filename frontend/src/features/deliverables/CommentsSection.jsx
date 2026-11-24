@@ -12,8 +12,8 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import { useNotify } from '../../components/NotificationProvider';
 import useApi from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
+import { avatarColor, initials } from '../../utils/people';
 
-const initials = (name) => name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
 function Comment({ comment, onChanged }) {
   const notify = useNotify();
@@ -37,11 +37,13 @@ function Comment({ comment, onChanged }) {
 
   return (
     <Stack direction="row" spacing={1.5} component="li" sx={{ listStyle: 'none' }}>
-      <Avatar sx={{ width: 32, height: 32, fontSize: 13, bgcolor: 'primary.light' }}>{initials(comment.author_name)}</Avatar>
+      <Avatar aria-hidden sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 700, bgcolor: avatarColor(comment.author_name), color: '#fff' }}>{initials(comment.author_name)}</Avatar>
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <Typography variant="body2">
           <strong>{comment.author_name}</strong>
-          <Typography component="span" variant="body2" color="text.secondary">
+          <Typography component="span" variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {' · '}{formatDate(comment.created_at)}{comment.edited && ' · edited'}
           </Typography>
         </Typography>
@@ -106,7 +108,11 @@ export default function CommentsSection({ deliverableKey, canComment }) {
     <Box component="section" aria-labelledby="comments-heading">
       <Typography id="comments-heading" variant="h3" gutterBottom>Comments{data ? ` (${comments.length})` : ''}</Typography>
       {error && <Alert severity="error" sx={{ mb: 1 }}>{error.message}</Alert>}
-      {!loading && !comments.length && !error && <Typography color="text.secondary" sx={{ mb: 2 }}>No comments yet.</Typography>}
+      {!loading && !comments.length && !error && <Typography
+        sx={{
+          color: "text.secondary",
+          mb: 2
+        }}>No comments yet.</Typography>}
       <Stack spacing={2} component="ul" sx={{ p: 0, m: 0, mb: 2 }}>
         {comments.map((comment) => <Comment key={comment.id} comment={comment} onChanged={reload} />)}
       </Stack>

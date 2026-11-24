@@ -72,7 +72,13 @@ export default function LeavePage() {
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing({})}>Record leave</Button>
         )}
       />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems={{ md: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{
+          alignItems: { md: 'center' },
+          mb: 2
+        }}>
         <SearchField value={list.q} onChange={list.setSearch} label="Search person or note" />
         <TextField select label="Type" value={list.values.type} onChange={(e) => list.setFilter('type', e.target.value)} sx={{ minWidth: 150 }} fullWidth={false}>
           <MenuItem value="">All types</MenuItem>
@@ -94,12 +100,23 @@ export default function LeavePage() {
         emptyText="No leave recorded for these filters."
         renderCard={(row) => (
           <Stack spacing={0.5}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Typography fontWeight={600}>{row.user_name}</Typography>
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
+              <Typography sx={{
+                fontWeight: 600
+              }}>{row.user_name}</Typography>
               {actions(row)}
             </Stack>
-            <Stack direction="row" spacing={1} alignItems="center"><StatusChip value={row.type} /><Typography variant="body2">{leaveLength(row)} day(s)</Typography></Stack>
-            <Typography variant="body2" color="text.secondary">{formatDate(row.start_date)} – {formatDate(row.end_date)}</Typography>
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: "center"
+            }}><StatusChip value={row.type} /><Typography variant="body2">{leaveLength(row)} day(s)</Typography></Stack>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{formatDate(row.start_date)} – {formatDate(row.end_date)}</Typography>
             {row.note && <Typography variant="body2">{row.note}</Typography>}
           </Stack>
         )}

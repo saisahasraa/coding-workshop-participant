@@ -15,7 +15,7 @@ import theme from '../theme';
 function Providers({ children, route, width }) {
   return (
     <ResponsiveContext.Provider value={{ width }}>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={theme} defaultMode="light">
         <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
       </ThemeProvider>
     </ResponsiveContext.Provider>

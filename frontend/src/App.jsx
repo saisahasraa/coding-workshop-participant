@@ -42,25 +42,25 @@ const NotFoundPage = lazy(() => import('./features/NotFoundPage'));
 
 /** Navigation entries, each shown only when the role can use it. */
 const NAV = [
-  { label: 'Dashboard', to: '/', icon: <DashboardOutlinedIcon />, visible: () => true },
-  { label: 'Projects', to: '/projects', icon: <AccountTreeOutlinedIcon />, visible: () => true },
-  { label: 'Deliverables', to: '/deliverables', icon: <ChecklistOutlinedIcon />, visible: () => true },
-  { label: 'My work', to: '/my-work', icon: <AssignmentTurnedInOutlinedIcon />, visible: (can) => can('deliverables', 'update') },
-  { label: 'Teams', to: '/teams', icon: <GroupsOutlinedIcon />, visible: () => true },
-  { label: 'Capacity', to: '/capacity', icon: <InsightsOutlinedIcon />, visible: () => true },
-  { label: 'Budget', to: '/budget', icon: <AccountBalanceWalletOutlinedIcon />, visible: () => true },
-  { label: 'Leave', to: '/leave', icon: <EventBusyOutlinedIcon />, visible: () => true },
-  { label: 'Users', to: '/admin/users', icon: <PeopleAltOutlinedIcon />, visible: (can) => can('users', 'create') },
-  { label: 'Departments', to: '/admin/departments', icon: <ApartmentOutlinedIcon />, visible: (can) => can('departments', 'create') },
-  { label: 'Settings', to: '/admin/settings', icon: <AdminPanelSettingsOutlinedIcon />, visible: (can) => can('settings', 'update') },
-  { label: 'Audit log', to: '/admin/audit', icon: <HistoryOutlinedIcon />, visible: (can) => can('audit-log', 'read') },
-  { label: 'System status', to: '/status', icon: <MonitorHeartOutlinedIcon />, visible: () => true },
+  { section: 'Overview', label: 'Dashboard', to: '/', icon: <DashboardOutlinedIcon />, visible: () => true },
+  { section: 'Work', label: 'Projects', to: '/projects', icon: <AccountTreeOutlinedIcon />, visible: () => true },
+  { section: 'Work', label: 'Deliverables', to: '/deliverables', icon: <ChecklistOutlinedIcon />, visible: () => true },
+  { section: 'Work', label: 'My work', to: '/my-work', icon: <AssignmentTurnedInOutlinedIcon />, visible: (can) => can('deliverables', 'update') },
+  { section: 'People', label: 'Teams', to: '/teams', icon: <GroupsOutlinedIcon />, visible: () => true },
+  { section: 'People', label: 'Capacity', to: '/capacity', icon: <InsightsOutlinedIcon />, visible: () => true },
+  { section: 'People', label: 'Leave', to: '/leave', icon: <EventBusyOutlinedIcon />, visible: () => true },
+  { section: 'Money', label: 'Budget', to: '/budget', icon: <AccountBalanceWalletOutlinedIcon />, visible: () => true },
+  { section: 'Admin', label: 'Users', to: '/admin/users', icon: <PeopleAltOutlinedIcon />, visible: (can) => can('users', 'create') },
+  { section: 'Admin', label: 'Departments', to: '/admin/departments', icon: <ApartmentOutlinedIcon />, visible: (can) => can('departments', 'create') },
+  { section: 'Admin', label: 'Settings', to: '/admin/settings', icon: <AdminPanelSettingsOutlinedIcon />, visible: (can) => can('settings', 'update') },
+  { section: 'Admin', label: 'Audit log', to: '/admin/audit', icon: <HistoryOutlinedIcon />, visible: (can) => can('audit-log', 'read') },
+  { section: 'System', label: 'System status', to: '/status', icon: <MonitorHeartOutlinedIcon />, visible: () => true },
 ];
 
 function Shell() {
   const { user, can, logout } = useAuth();
   const { appName } = useMeta();
-  const navItems = NAV.filter((item) => item.visible(can)).map(({ label, to, icon }) => ({ label, to, icon }));
+  const navItems = NAV.filter((item) => item.visible(can)).map(({ label, to, icon, section }) => ({ label, to, icon, section }));
   return <AppShell appName={appName} navItems={navItems} user={user} onLogout={logout} search={<GlobalSearch />} />;
 }
 

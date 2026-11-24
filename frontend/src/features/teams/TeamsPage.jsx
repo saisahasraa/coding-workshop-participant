@@ -73,10 +73,19 @@ export default function TeamsPage() {
         onRowClick={(row) => navigate(`/teams/${row.id}`)}
         emptyText="No teams yet."
         renderCard={(row) => (
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Stack
+            direction="row"
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "flex-start"
+            }}>
             <div>
-              <Typography fontWeight={600}>{row.name}</Typography>
-              <Typography variant="body2" color="text.secondary">{row.department_name} · {row.lead_name || 'No lead'} · {row.member_count} members</Typography>
+              <Typography sx={{
+                fontWeight: 600
+              }}>{row.name}</Typography>
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>{row.department_name} · {row.lead_name || 'No lead'} · {row.member_count} members</Typography>
             </div>
             {actions(row)}
           </Stack>

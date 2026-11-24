@@ -133,10 +133,11 @@ def test_visibility_setting_and_per_project_override(call, org, make_project):
 # -- deliverables -------------------------------------------------------------------------
 
 def test_deliverable_create_rules(call, org, make_project):
-    project = make_project()
+    project = make_project(edit_access="members")           # only this project's members may add work
     assert call("POST", "/deliverables", {"project_id": project["id"], "name": "x"}, org["pm2"]["token"])[0] == 403
     assert call("POST", "/deliverables", {"project_id": project["id"], "name": "x"},
                 org["team_member"]["token"])[0] == 403
+    assert call("POST", "/deliverables", {"project_id": project["id"], "name": "x"}, org["viewer"]["token"])[0] == 403
     status, body = call("POST", "/deliverables", {"project_id": project["id"], "name": "x",
                                                   "owner_id": org["viewer"]["id"]}, org["project_manager"]["token"])
     assert status == 400 and "owner_id" in body["error"]["details"]
@@ -149,17 +150,20 @@ def test_deliverable_create_rules(call, org, make_project):
     assert body["key"] == f"{project['key']}-1"
 
 
-def test_owner_can_update_status_and_progress_only(call, org, make_project):
-    project = make_project()
+def test_the_assignee_edits_their_deliverable_but_cannot_delete_or_move_it(call, org, make_project):
+    project = make_project(edit_access="members")
+    other = make_project()
     member = org["team_member"]
     item = _deliverable(call, project, org["project_manager"]["token"], owner_id=member["id"])
     path = f"/deliverables/{item['id']}"
     mine = call("GET", path, token=member["token"])[1]
-    assert mine["permissions"] == {"update": True, "delete": False, "editable_fields": ["progress_pct", "status"]}
-    assert call("PUT", path, {"progress_pct": 60, "status": "in_progress"}, member["token"])[0] == 200
-    status, body = call("PUT", path, {"name": "Renamed"}, member["token"])
-    assert status == 403 and "progress_pct, status" in body["error"]["message"]
-    assert call("PUT", path, {"status": "blocked"}, org["team_lead"]["token"])[0] == 403  # not the owner
+    assert mine["permissions"]["update"] is True and mine["permissions"]["delete"] is False
+    editable = mine["permissions"]["editable_fields"]
+    assert "name" in editable and "project_id" not in editable
+    changes = {"progress_pct": 60, "status": "in_progress", "name": "Renamed"}
+    assert call("PUT", path, changes, member["token"])[0] == 200
+    assert call("PUT", path, {"project_id": other["id"]}, member["token"])[0] == 403
+    assert call("PUT", path, {"status": "blocked"}, org["team_lead"]["token"])[0] == 403  # not a member
     assert call("DELETE", path, token=member["token"])[0] == 403
 
     done = call("PUT", path, {"status": "completed"}, member["token"])[1]
