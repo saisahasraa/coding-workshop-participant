@@ -53,7 +53,7 @@ All use the password `Demo#2026!` (the administrator's password is the Terraform
 
 | Role | Account | Can |
 |------|---------|-----|
-| Project manager | `alice.pm@acme.example`, `bob.pm@acme.example` | Run their projects: deliverables, links, expenses |
+| Project manager | `alice.pm@acme.example`, `bob.pm@acme.example` | Run their projects; record expenses and set the planned budget on any project |
 | Team lead | `carol.lead@acme.example` | Manage their team's capacity and leave |
 | Team member | `dan.dev@acme.example`, `erin.dev@acme.example`, `frank.analyst@acme.example` | Update their own work and leave |
 | Viewer | `grace.exec@acme.example` | Read everything they are allowed to see |

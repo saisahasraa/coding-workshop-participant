@@ -271,7 +271,8 @@ PROJECT_FIELDS = {
 
 
 class ProjectPolicy(Policy):
-    """Admins: everything. Project managers: create, and change/delete projects they manage."""
+    """Admins: everything. Project managers: create, change and delete projects they manage, and set the planned
+    budget of any project."""
 
     def actions(self, user: User) -> frozenset[str]:
         return ALL_ACTIONS if has_role(user, ADMIN, PROJECT_MANAGER) else frozenset({READ})
@@ -289,7 +290,8 @@ class ProjectPolicy(Policy):
             return frozenset(PROJECT_FIELDS) - {"key"}
         if has_role(user, PROJECT_MANAGER) and record["manager_id"] == user["id"]:
             return frozenset(PROJECT_FIELDS) - {"key", "manager_id"}
-        return frozenset()
+        # Budgets are managed by every project manager, whoever manages the project itself.
+        return frozenset({"planned_budget"}) if has_role(user, PROJECT_MANAGER) else frozenset()
 
     def can_delete(self, user: User, record: dict) -> bool:
         return is_admin(user) or (has_role(user, PROJECT_MANAGER) and record["manager_id"] == user["id"])
@@ -896,7 +898,7 @@ EXPENSE_FIELDS = {
 
 
 class ExpensePolicy(Policy):
-    """Everyone who can see a project reads its expenses; its manager and admins record them."""
+    """Everyone who can see a project reads its expenses; admins and any project manager record and edit them."""
 
     def actions(self, user: User) -> frozenset[str]:
         return ALL_ACTIONS if has_role(user, ADMIN, PROJECT_MANAGER) else frozenset({READ})
@@ -904,18 +906,11 @@ class ExpensePolicy(Policy):
     def scope(self, user: User) -> Scope:
         return project_visibility("p", user)
 
-    def _manages(self, user: User, record: dict) -> bool:
-        return is_admin(user) or (has_role(user, PROJECT_MANAGER) and record["project_manager_id"] == user["id"])
+    def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:  # noqa: ARG002
+        return frozenset(EXPENSE_FIELDS) - {"project_id"} if has_role(user, ADMIN, PROJECT_MANAGER) else frozenset()
 
-    def check_create(self, user: User, values: dict) -> None:
-        if not is_admin(user) and not _manages_project(user, values["project_id"]):
-            raise Forbidden("Only the project's manager can record expenses")
-
-    def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:
-        return frozenset(EXPENSE_FIELDS) - {"project_id"} if self._manages(user, record) else frozenset()
-
-    def can_delete(self, user: User, record: dict) -> bool:
-        return self._manages(user, record)
+    def can_delete(self, user: User, record: dict) -> bool:  # noqa: ARG002
+        return has_role(user, ADMIN, PROJECT_MANAGER)
 
 
 def _expenses_before_write(ctx: WriteContext) -> None:

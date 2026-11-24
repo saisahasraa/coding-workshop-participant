@@ -44,6 +44,27 @@ describe('Project form', () => {
     await waitFor(() => expect(update).toEqual({ edit_access: 'members', comment_access: 'everyone' }));
   });
 
+  it('lets a manager of another project change only the planned budget', async () => {
+    let update;
+    const budgetOnly = { ...PROJECT, permissions: { update: true, delete: false, editable_fields: ['planned_budget'], add_deliverables: true } };
+    server.use(...sessionHandlers('project_manager'), ...lookups(),
+      http.get(apiUrl('/projects/WEB'), () => HttpResponse.json(budgetOnly)),
+      http.get(apiUrl('/deliverables'), () => HttpResponse.json(page([]))),
+      http.put(apiUrl('/projects/7'), async ({ request }) => { update = await request.json(); return HttpResponse.json({ ...PROJECT, ...update }); }));
+    renderWithApp(routes(), { route: '/projects/WEB' });
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText(/^Name/)).toBeDisabled();
+    expect(within(dialog).getByLabelText(/Who can add and edit deliverables/)).toHaveAttribute('aria-disabled', 'true');
+    const budget = within(dialog).getByLabelText(/Planned budget/);
+    expect(budget).toBeEnabled();
+    await userEvent.clear(budget);
+    await userEvent.type(budget, '150000');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(update).toEqual({ planned_budget: 150000 }));
+  });
+
   it('closes from the corner button without saving', async () => {
     server.use(...sessionHandlers('project_manager'), ...lookups(),
       http.get(apiUrl('/projects/WEB'), () => HttpResponse.json(PROJECT)),

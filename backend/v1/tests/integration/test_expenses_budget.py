@@ -48,17 +48,36 @@ def test_categories_are_configurable(call, org, make_project):
     assert _expense(call, org["project_manager"], project, category="software")[0] == 400
 
 
-def test_only_the_projects_manager_and_admins_write(call, org, make_project):
-    project = make_project()
-    assert _expense(call, org["pm2"], project)[0] == 403
+def test_admins_and_any_project_manager_write_everyone_else_reads(call, org, make_project):
+    project = make_project()                                        # managed by the first project manager
+    pm2 = org["pm2"]                                                # a project manager, but not this project's
     assert _expense(call, org["team_lead"], project)[0] == 403
+    assert _expense(call, org["team_member"], project)[0] == 403
     assert _expense(call, org["viewer"], project)[0] == 403
+    status, theirs = _expense(call, pm2, project)
+    assert status == 201 and theirs["permissions"]["update"] and theirs["permissions"]["delete"]
     status, mine = _expense(call, org["admin"], project)
     assert status == 201
-    assert call("PUT", f"/expenses/{mine['id']}", {"amount": 5}, org["pm2"]["token"])[0] == 403
-    assert call("DELETE", f"/expenses/{mine['id']}", token=org["pm2"]["token"])[0] == 403
-    status, seen = call("GET", f"/expenses/{mine['id']}", token=org["viewer"]["token"])
+    assert call("PUT", f"/expenses/{mine['id']}", {"amount": 5}, pm2["token"])[0] == 200
+    assert call("PUT", f"/expenses/{mine['id']}", {"amount": 6}, org["team_lead"]["token"])[0] == 403
+    assert call("DELETE", f"/expenses/{mine['id']}", token=org["viewer"]["token"])[0] == 403
+    assert call("DELETE", f"/expenses/{mine['id']}", token=pm2["token"])[0] == 204
+    status, seen = call("GET", f"/expenses/{theirs['id']}", token=org["viewer"]["token"])
     assert status == 200 and seen["permissions"]["update"] is False
+
+
+def test_any_project_manager_sets_the_planned_budget_but_nothing_else(call, org, make_project):
+    project = make_project(key="BDG", planned_budget=1000)
+    pm2, viewer = org["pm2"], org["viewer"]
+    seen = call("GET", "/projects/BDG", token=pm2["token"])[1]["permissions"]
+    assert seen["update"] is True and seen["editable_fields"] == ["planned_budget"] and seen["delete"] is False
+    assert call("PUT", f"/projects/{project['id']}", {"planned_budget": 2500}, pm2["token"])[0] == 200
+    assert float(call("GET", "/projects/BDG", token=pm2["token"])[1]["planned_budget"]) == 2500
+    status, body = call("PUT", f"/projects/{project['id']}", {"name": "Renamed", "planned_budget": 1}, pm2["token"])
+    assert status == 403 and "planned_budget" in body["error"]["message"]
+    assert call("DELETE", f"/projects/{project['id']}", token=pm2["token"])[0] == 403
+    assert call("PUT", f"/projects/{project['id']}", {"planned_budget": 9}, org["team_lead"]["token"])[0] == 403
+    assert call("PUT", f"/projects/{project['id']}", {"planned_budget": 9}, viewer["token"])[0] == 403
 
 
 def test_hidden_projects_hide_their_expenses(call, org, make_project):

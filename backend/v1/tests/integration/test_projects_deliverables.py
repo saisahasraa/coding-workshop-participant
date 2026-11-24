@@ -49,7 +49,8 @@ def test_only_owner_pm_or_admin_can_change_or_delete(call, org, make_project):
     project = make_project()
     path = f"/projects/{project['id']}"
     other = call("GET", path, token=org["pm2"]["token"])[1]
-    assert other["permissions"] == {"update": False, "delete": False, "editable_fields": [], "add_deliverables": True}
+    assert other["permissions"] == {"update": True, "delete": False, "editable_fields": ["planned_budget"],
+                                    "add_deliverables": True}                  # only the budget is theirs to set
     assert call("PUT", path, {"name": "Hijack"}, org["pm2"]["token"])[0] == 403
     assert call("DELETE", path, token=org["pm2"]["token"])[0] == 403
     assert call("PUT", path, {"name": "x"}, org["team_member"]["token"])[0] == 403
