@@ -52,6 +52,7 @@ class Env:
     admin_password: str
     app_version: str
     attachments_bucket: str
+    attachments_region: str
     s3_public_endpoint: str
     notify_from_email: str
 
@@ -77,6 +78,7 @@ def load_env() -> Env:
         admin_password=os.getenv("ADMIN_PASSWORD", ""),
         app_version=os.getenv("APP_VERSION", "0.1.0"),
         attachments_bucket=os.getenv("ATTACHMENTS_BUCKET", ""),
+        attachments_region=os.getenv("ATTACHMENTS_REGION", ""),
         s3_public_endpoint=os.getenv("S3_PUBLIC_ENDPOINT", ""),
         notify_from_email=os.getenv("NOTIFY_FROM_EMAIL", ""),
     )

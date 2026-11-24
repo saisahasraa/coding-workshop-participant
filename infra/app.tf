@@ -22,6 +22,7 @@ locals {
 
     # Attachments: the bucket, and (locally only) the LocalStack address the browser can reach for signed links.
     ATTACHMENTS_BUCKET = aws_s3_bucket.attachments.bucket
+    ATTACHMENTS_REGION = aws_s3_bucket.attachments.region
     S3_PUBLIC_ENDPOINT = data.aws_caller_identity.this.id == "000000000000" ? "http://localhost:4566" : ""
 
     # Notification emails: only sent when this is set and the admin setting notifications.email_enabled is on.

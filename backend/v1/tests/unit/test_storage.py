@@ -29,8 +29,9 @@ def fake_s3(monkeypatch):
     storage._client.cache_clear()  # noqa: SLF001
 
 
-def _env(monkeypatch, bucket="files", endpoint=""):
-    monkeypatch.setattr(storage, "ENV", types.SimpleNamespace(attachments_bucket=bucket, s3_public_endpoint=endpoint))
+def _env(monkeypatch, bucket="files", endpoint="", region=""):
+    monkeypatch.setattr(storage, "ENV", types.SimpleNamespace(
+        attachments_bucket=bucket, s3_public_endpoint=endpoint, attachments_region=region))
 
 
 def test_upload_link_binds_the_content_type(monkeypatch, fake_s3):
@@ -52,6 +53,13 @@ def test_download_link_names_the_file_and_only_inlines_when_asked(monkeypatch, f
     assert calls[0][1]["ResponseContentDisposition"] == "inline; filename=\"my 'plan'.pdf\""
     assert calls[1][1]["ResponseContentDisposition"] == 'attachment; filename="page.html"'
     assert calls[1][1]["ResponseContentType"] == "text/html"
+
+
+def test_links_are_signed_for_the_buckets_region(monkeypatch, fake_s3):
+    _, created = fake_s3
+    _env(monkeypatch, region="us-east-1")
+    storage.upload_link("k", "text/plain")
+    assert created["region_name"] == "us-east-1"
 
 
 def test_local_links_use_the_browser_reachable_endpoint(monkeypatch, fake_s3):

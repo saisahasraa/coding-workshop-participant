@@ -27,7 +27,8 @@ def _client():
 
     # Locally the links must point at an address the browser can reach (LocalStack on localhost).
     style = {"addressing_style": "path"} if ENV.s3_public_endpoint else {}
-    return boto3.client("s3", endpoint_url=ENV.s3_public_endpoint or None,
+    # Links must be signed for the region the bucket lives in, which can differ from the Lambda's own.
+    return boto3.client("s3", region_name=ENV.attachments_region or None, endpoint_url=ENV.s3_public_endpoint or None,
                         config=Config(signature_version="s3v4", s3=style))
 
 
