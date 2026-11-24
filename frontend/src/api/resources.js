@@ -20,6 +20,17 @@ export const usersApi = resourceApi('users');
 export const departmentsApi = resourceApi('departments');
 export const projectsApi = resourceApi('projects');
 export const deliverablesApi = resourceApi('deliverables');
+export const teamsApi = resourceApi('teams');
+export const leavesApi = resourceApi('leaves');
+
+/**
+ * Capacity report for a window.
+ * @param {{from?: string, to?: string, team_id?: string, department_id?: string}} query
+ */
+/** People working on a project, with their deliverables there. @param {string} ref project key or id */
+export const fetchProjectTeam = (ref, signal) => api.get(`/projects/${encodeURIComponent(ref)}/team`, { signal });
+
+export const fetchCapacity = (query, signal) => api.get('/reports/capacity', { query, signal });
 
 /** @returns {Promise<object>} enumerations and public settings */
 export const fetchMeta = (signal) => api.get('/meta', { signal });

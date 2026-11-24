@@ -109,7 +109,18 @@ export default function DeliverableDetailPage() {
             </Stack>
 
             {item.is_overdue && <Alert severity="error">Overdue: this was due on {formatDate(item.due_date)}.</Alert>}
-            {item.status === 'blocked' && <Alert severity="warning">Blocked: this deliverable cannot progress until the blocker is resolved.</Alert>}
+            {item.open_blockers > 0 && (
+              <Alert severity="warning">
+                Waiting on {item.open_blockers} unfinished work item{item.open_blockers > 1 ? 's' : ''} that block{item.open_blockers > 1 ? '' : 's'} this
+                one (see Linked work items). It cannot be completed until {item.open_blockers > 1 ? 'they are' : 'it is'} done.
+              </Alert>
+            )}
+            {item.status === 'blocked' && item.open_blockers === 0 && (
+              <Alert severity="info">
+                Marked as blocked, but no linked work item is holding it up. The status is set by hand and does not clear itself:
+                change it when the obstacle is gone.
+              </Alert>
+            )}
 
             <section aria-labelledby="description-heading">
               <Typography id="description-heading" variant="h3" gutterBottom>Description</Typography>

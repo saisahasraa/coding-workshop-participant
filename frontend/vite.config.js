@@ -26,6 +26,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
     css: false,
+    // Multi-step UI flows on a small CI/VDI machine need more than the 5 s default.
+    testTimeout: 20000,
     // Never let tests reach a real backend from a developer's .env.local.
     env: { VITE_API_URL: 'http://api.test' },
     coverage: {

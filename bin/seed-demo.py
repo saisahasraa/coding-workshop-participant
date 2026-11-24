@@ -68,7 +68,7 @@ DELIVERABLES = {
     ],
     "PAY": [
         ("Card tokenization service", "dan.dev@acme.example", "completed", "critical", -50, 120, 100),
-        ("Fraud rules engine", "dan.dev@acme.example", "blocked", "critical", -10, 100, 40),
+        ("Fraud rules engine", "dan.dev@acme.example", "blocked", "critical", -10, 100, 10),
         ("PCI audit", "carol.lead@acme.example", "in_progress", "high", 5, 40, 20),
         ("Merchant dashboard", "erin.dev@acme.example", "not_started", "medium", 10, 60, 0),
     ],
@@ -86,6 +86,19 @@ DELIVERABLES = {
     ],
 }
 
+
+# (team, department, lead email or None, member emails)
+TEAMS = [
+    ("Platform", "ENG", "carol.lead@acme.example",
+     ["carol.lead@acme.example", "dan.dev@acme.example", "erin.dev@acme.example"]),
+    ("Analytics", "FIN", None, ["frank.analyst@acme.example"]),
+]
+
+# (person email, type, start offset, end offset, note)
+LEAVES = [
+    ("erin.dev@acme.example", "vacation", 7, 11, "Family trip"),
+    ("dan.dev@acme.example", "training", 14, 15, "Conference"),
+]
 
 CRITERIA = {
     "Design system": ("- Tokens for colour, type and spacing published\n- 20 core components in Storybook\n"
@@ -157,6 +170,21 @@ class Api:
         sys.exit(f"POST {path} failed ({status}): {created}")
 
 
+def seed_capacity(api: Api, departments: dict, users: dict) -> None:
+    """Teams, memberships and leave. Workload needs no seeding: it comes from the deliverables' estimates."""
+    for name, dept, lead, members in TEAMS:
+        body = {"name": name, "department_id": departments[dept]["id"]}
+        if lead:
+            body["lead_id"] = users[lead]["id"]
+        team = api.ensure("/teams", body, "name")
+        for email in members:
+            api.request("PUT", f"/users/{users[email]['id']}", {"team_id": team["id"]})
+    for email, kind, start, end, note in LEAVES:
+        api.request("POST", "/leaves", {"user_id": users[email]["id"], "type": kind, "start_date": _days(start),
+                                        "end_date": _days(end), "note": note})
+    print(f"Teams: {len(TEAMS)}  Leave: {len(LEAVES)}")
+
+
 def seed_collaboration(api: Api) -> None:
     """Add acceptance criteria, links and comments where missing (safe to re-run)."""
     for code, items in DELIVERABLES.items():
@@ -224,6 +252,7 @@ def main() -> None:
         print(f"  {code}: {len(DELIVERABLES[code])} deliverables")
 
     seed_collaboration(api)
+    seed_capacity(api, departments, users)
 
     print(f"\nDemo users (password: {DEMO_PASSWORD}):")
     for user in USERS:

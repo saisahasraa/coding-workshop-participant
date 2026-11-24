@@ -58,8 +58,8 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 
 def project_visibility(alias: str, user: User) -> Scope:
-    """Rows of project ``alias`` the user may see. Admins and project managers see all projects;
-    others see projects visible to everyone, plus projects they manage or own deliverables in."""
+    """Rows of project ``alias`` the user may see. Admins and project managers see all projects; others see
+    projects visible to everyone, plus projects they are a member of (they manage it or own a deliverable in it)."""
     if has_role(user, ADMIN, PROJECT_MANAGER):
         return None
     condition = sql.SQL(
@@ -115,6 +115,22 @@ def _users_before_delete(request: Request, record: dict) -> None:
         raise ValidationFailed({"id": "you cannot delete your own account"})
 
 
+class UserPolicy(Policy):
+    """Admins manage accounts. Team leads may change the weekly capacity of their own team's members."""
+
+    def actions(self, user: User) -> frozenset[str]:
+        if is_admin(user):
+            return ALL_ACTIONS
+        return frozenset({READ, UPDATE}) if has_role(user, TEAM_LEAD) else frozenset({READ})
+
+    def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:
+        if is_admin(user):
+            return None
+        if has_role(user, TEAM_LEAD) and record.get("team_lead_id") == user["id"]:
+            return frozenset({"weekly_capacity_hours"})
+        return frozenset()
+
+
 USERS = Resource(
     name="users",
     table="users",
@@ -125,17 +141,23 @@ USERS = Resource(
         "job_title": Field("string", max_len=100),
         "weekly_capacity_hours": Field("decimal", nullable=False, minimum=Decimal(0), maximum=Decimal(168)),
         "is_active": Field("boolean", nullable=False),
+        "team_id": Field("ref", ref="teams"),
         "password": Field("string", nullable=False, max_len=128),
     },
-    policy=Policy(),
-    select="t.*, (t.password_hash IS NOT NULL) AS can_login",
+    policy=UserPolicy(),
+    select=("t.*, (t.password_hash IS NOT NULL) AS can_login, tm.name AS team_name, tm.lead_id AS team_lead_id,"
+            " td.name AS department_name"),
+    source=("users t LEFT JOIN teams tm ON tm.id = t.team_id"
+            " LEFT JOIN departments td ON td.id = tm.department_id"),
     filters={
         "role": Filter("t.role", "enum", multi=True, choices=ROLES),
         "is_active": Filter("t.is_active", "boolean"),
+        "team_id": Filter("t.team_id", "ref"),
+        "department_id": Filter("tm.department_id", "ref"),
     },
     search=("t.name", "t.email", "t.job_title"),
     sorts={"name": "t.name", "email": "t.email", "role": "t.role", "created_at": "t.created_at",
-           "last_login_at": "t.last_login_at"},
+           "last_login_at": "t.last_login_at", "team": "tm.name"},
     default_sort="name",
     hidden=("password_hash", "token_version"),
     before_write=_users_before_write,
@@ -433,7 +455,9 @@ DELIVERABLES = Resource(
         "t.*, p.key || '-' || t.number AS key, p.key AS project_key, p.name AS project_name,"
         " p.manager_id AS project_manager_id, p.start_date AS project_start_date, p.end_date AS project_end_date,"
         " o.name AS owner_name, r.name AS reporter_name,"
-        " (t.due_date < current_date AND t.status <> 'completed') AS is_overdue"
+        " (t.due_date < current_date AND t.status <> 'completed') AS is_overdue,"
+        " (SELECT count(*) FROM deliverable_links bl JOIN deliverables bs ON bs.id = bl.source_id"
+        "   WHERE bl.type = 'blocks' AND bl.target_id = t.id AND bs.status <> 'completed') AS open_blockers"
     ),
     source=("deliverables t JOIN projects p ON p.id = t.project_id"
             " LEFT JOIN users o ON o.id = t.owner_id LEFT JOIN users r ON r.id = t.reporter_id"),
@@ -459,7 +483,134 @@ DELIVERABLES = Resource(
 
 
 
-RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, PROJECTS, DELIVERABLES)
+# ---------------------------------------------------------------------------
+# Teams
+# ---------------------------------------------------------------------------
+
+def _teams_before_write(ctx: WriteContext) -> None:
+    if ctx.changed("lead_id") and ctx.values["lead_id"] is not None:
+        _require_user(ctx.values["lead_id"], "lead_id", (TEAM_LEAD,), "must be an active user with the team lead role")
+
+
+TEAMS = Resource(
+    name="teams",
+    table="teams",
+    fields={
+        "department_id": Field("ref", required=True, nullable=False, ref="departments"),
+        "name": Field("string", required=True, nullable=False, max_len=100),
+        "lead_id": Field("ref", ref="users"),
+    },
+    policy=Policy(),
+    select=("t.*, d.name AS department_name, l.name AS lead_name,"
+            " (SELECT count(*) FROM users m WHERE m.team_id = t.id) AS member_count"),
+    source=("teams t JOIN departments d ON d.id = t.department_id LEFT JOIN users l ON l.id = t.lead_id"),
+    filters={
+        "department_id": Filter("t.department_id", "ref"),
+        "lead_id": Filter("t.lead_id", "ref", me=True),
+    },
+    search=("t.name", "d.name", "l.name"),
+    sorts={"name": "t.name", "department": "d.name", "lead": "l.name"},
+    default_sort="name",
+    before_write=_teams_before_write,
+)
+
+
+def _leads_team_of(user: User, member_id: int) -> bool:
+    """Whether ``user`` is a team lead of the team ``member_id`` belongs to."""
+    if not has_role(user, TEAM_LEAD):
+        return False
+    row = db.fetch_one(
+        "SELECT 1 AS ok FROM users u JOIN teams t ON t.id = u.team_id WHERE u.id = %s AND t.lead_id = %s",
+        (member_id, user["id"]),
+    )
+    return row is not None
+
+
+def _is_lead_of_record(user: User, record: dict) -> bool:
+    return has_role(user, TEAM_LEAD) and record.get("team_lead_id") == user["id"]
+
+
+# ---------------------------------------------------------------------------
+# Leave
+# ---------------------------------------------------------------------------
+
+LEAVE_FIELDS = {
+    "user_id": Field("ref", nullable=False, ref="users"),  # defaults to the person recording it
+    "type": Field("string", required=True, nullable=False, max_len=30),
+    "start_date": Field("date", required=True, nullable=False),
+    "end_date": Field("date", required=True, nullable=False),
+    "note": Field("string", max_len=1000),
+}
+
+
+class LeavePolicy(Policy):
+    """Everyone reads. People record their own leave; team leads their team's; admins anyone's."""
+
+    def actions(self, user: User) -> frozenset[str]:
+        return ALL_ACTIONS if has_role(user, ADMIN, TEAM_LEAD, TEAM_MEMBER) else frozenset({READ})
+
+    def _manages(self, user: User, record: dict) -> bool:
+        return is_admin(user) or record["user_id"] == user["id"] or _is_lead_of_record(user, record)
+
+    def check_create(self, user: User, values: dict) -> None:
+        if is_admin(user) or values["user_id"] == user["id"] or _leads_team_of(user, values["user_id"]):
+            return
+        scope = " or your team" if has_role(user, TEAM_LEAD) else ""
+        raise Forbidden(f"You can only record leave for yourself{scope}")
+
+    def editable_fields(self, user: User, record: dict) -> frozenset[str] | None:
+        if is_admin(user):
+            return None
+        return frozenset(LEAVE_FIELDS) - {"user_id"} if self._manages(user, record) else frozenset()
+
+    def can_delete(self, user: User, record: dict) -> bool:
+        return self._manages(user, record)
+
+
+def _leaves_before_write(ctx: WriteContext) -> None:
+    values = ctx.values
+    if ctx.existing is None:
+        values.setdefault("user_id", ctx.user["id"])
+        values["created_by"] = ctx.user["id"]
+    if ctx.changed("user_id"):
+        _require_user(values["user_id"], "user_id", ROLES, "must be an active user")
+    if ctx.changed("type") and values["type"] not in get_setting("leaves.types"):
+        raise ValidationFailed({"type": f"must be one of: {', '.join(get_setting('leaves.types'))}"})
+    _date_order(ctx, "start_date", "end_date")
+    merged = ctx.merged
+    clash = db.fetch_one(
+        "SELECT start_date, end_date FROM leaves WHERE user_id = %s AND id IS DISTINCT FROM %s"
+        " AND start_date <= %s AND end_date >= %s LIMIT 1",
+        (merged["user_id"], ctx.existing["id"] if ctx.existing else None, merged["end_date"], merged["start_date"]),
+    )
+    if clash:
+        raise ValidationFailed({"start_date": "overlaps existing leave "
+                                              f"({clash['start_date']} to {clash['end_date']})"})
+
+
+LEAVES = Resource(
+    name="leaves",
+    table="leaves",
+    fields=LEAVE_FIELDS,
+    policy=LeavePolicy(),
+    select="t.*, u.name AS user_name, u.team_id, tm.name AS team_name, tm.lead_id AS team_lead_id",
+    source="leaves t JOIN users u ON u.id = t.user_id LEFT JOIN teams tm ON tm.id = u.team_id",
+    filters={
+        "user_id": Filter("t.user_id", "ref", me=True),
+        "team_id": Filter("u.team_id", "ref"),
+        "type": Filter("t.type", "string", multi=True),
+        "from": Filter("t.end_date", "date", op=">="),  # leave overlapping [from, to]
+        "to": Filter("t.start_date", "date", op="<="),
+    },
+    search=("u.name", "t.note", "t.type"),
+    sorts={"start_date": "t.start_date", "end_date": "t.end_date", "user": "u.name", "type": "t.type"},
+    default_sort="-start_date",
+    hidden=("created_by",),
+    before_write=_leaves_before_write,
+)
+
+
+RESOURCES: tuple[Resource, ...] = (USERS, DEPARTMENTS, TEAMS, PROJECTS, DELIVERABLES, LEAVES)
 
 
 def capabilities(user: User) -> dict[str, list[str]]:

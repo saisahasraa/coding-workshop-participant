@@ -1,16 +1,29 @@
 import { useEffect, useState } from 'react';
-import { departmentsApi, usersApi } from '../api/resources';
+import { departmentsApi, teamsApi, usersApi } from '../api/resources';
+
+const ACTIVE = { is_active: true, limit: 200, sort: 'name' };
+
+/** Active members of every team the signed-in user leads (plus nothing else). */
+async function myTeamMembers(signal) {
+  const teams = await teamsApi.list({ lead_id: 'me', limit: 100 }, signal);
+  const lists = await Promise.all(teams.data.map((t) => usersApi.list({ ...ACTIVE, team_id: t.id }, signal)));
+  const seen = new Map(lists.flatMap((l) => l.data).map((u) => [u.id, u]));
+  return { data: [...seen.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+}
 
 const LOADERS = {
   departments: (signal) => departmentsApi.list({ limit: 200, sort: 'name' }, signal),
-  managers: (signal) => usersApi.list({ role: 'project_manager,admin', is_active: true, limit: 200, sort: 'name' }, signal),
-  people: (signal) => usersApi.list({ is_active: true, limit: 200, sort: 'name' }, signal),
-  assignees: (signal) => usersApi.list({ role: 'admin,project_manager,team_lead,team_member', is_active: true, limit: 200, sort: 'name' }, signal),
+  teams: (signal) => teamsApi.list({ limit: 200, sort: 'name' }, signal),
+  leads: (signal) => usersApi.list({ ...ACTIVE, role: 'team_lead' }, signal),
+  managers: (signal) => usersApi.list({ ...ACTIVE, role: 'project_manager,admin' }, signal),
+  people: (signal) => usersApi.list(ACTIVE, signal),
+  assignees: (signal) => usersApi.list({ ...ACTIVE, role: 'admin,project_manager,team_lead,team_member' }, signal),
+  myTeam: myTeamMembers,
 };
 
 /**
- * Load option lists (id/name pairs) for form selects while `enabled`.
- * @param {Array<'departments'|'managers'|'assignees'|'people'>} names
+ * Load option lists (`{value: id, label}`) for form selects while `enabled`.
+ * @param {Array<keyof typeof LOADERS>} names
  * @param {boolean} enabled
  * @returns {Object<string, {value: number, label: string}[]>}
  */

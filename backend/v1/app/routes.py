@@ -6,9 +6,9 @@ import logging
 
 import psycopg
 
-from app import admin, auth, collab, crud, db, migrations
+from app import admin, auth, capacity, collab, crud, db, migrations
 from app.config import ENV
-from app.http import Request, response, router
+from app.http import Request, ok, response, router
 from app.resources import RESOURCES
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,11 @@ router.add("DELETE", "/comments/{comment_id}", collab.delete_comment)
 router.add("GET", "/deliverables/{id}/links", collab.list_links)
 router.add("POST", "/deliverables/{id}/links", collab.add_link)
 router.add("DELETE", "/deliverables/{id}/links/{link_id}", collab.delete_link)
+
+# Reports
+router.add("GET", "/reports/capacity", lambda request: ok(capacity.build_report(request.user, request.query)))
+
+router.add("GET", "/projects/{id}/team", lambda request: ok(capacity.project_team(request.user, request.params["id"])))
 
 # Resources
 for _resource in RESOURCES:

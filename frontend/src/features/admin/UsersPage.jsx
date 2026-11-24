@@ -21,14 +21,16 @@ import SearchField from '../../components/SearchField';
 import StatusChip from '../../components/StatusChip';
 import useApi from '../../hooks/useApi';
 import useListQuery from '../../hooks/useListQuery';
+import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import { formatDate, labelize, toOptions } from '../../utils/format';
 
-function userFields(meta, isEdit, minPassword) {
+function userFields(meta, isEdit, minPassword, teams) {
   return [
     { name: 'name', label: 'Full name', required: true },
     { name: 'email', label: 'Email', type: 'email', required: true },
     { name: 'role', label: 'Role', type: 'select', required: true, defaultValue: 'team_member', options: toOptions(meta?.roles) },
+    { name: 'team_id', label: 'Team', type: 'select', numeric: true, options: teams },
     { name: 'job_title', label: 'Job title' },
     { name: 'weekly_capacity_hours', label: 'Weekly capacity (hours)', type: 'number', min: 0, max: 168, step: 'any',
       defaultValue: meta?.settings?.['capacity.default_weekly_hours'] ?? 40 },
@@ -50,6 +52,7 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const minPassword = meta?.settings?.['auth.password_min_length'] || 8;
+  const teams = useLookups(['teams'], Boolean(editing)).teams || [];
 
   const { query } = list;
   const loader = useCallback((signal) => usersApi.list(query, signal), [query]);
@@ -68,6 +71,7 @@ export default function UsersPage() {
     { field: 'name', headerName: 'Name', flex: 1, minWidth: 160 },
     { field: 'email', headerName: 'Email', flex: 1, minWidth: 200 },
     { field: 'role', headerName: 'Role', width: 150, renderCell: ({ value }) => <StatusChip value={value} /> },
+    { field: 'team', headerName: 'Team', width: 150, valueGetter: (_v, row) => row.team_name || '—' },
     { field: 'job_title', headerName: 'Job title', width: 170, sortable: false },
     { field: 'is_active', headerName: 'Status', width: 110, sortable: false,
       renderCell: ({ value }) => <Chip size="small" label={value ? 'Active' : 'Inactive'} color={value ? 'success' : 'default'} variant="outlined" /> },
@@ -116,7 +120,7 @@ export default function UsersPage() {
         )}
       />
       {editing && (
-        <FormDialog open title={editing.id ? `Edit ${editing.name}` : 'New user'} fields={userFields(meta, Boolean(editing.id), minPassword)}
+        <FormDialog open title={editing.id ? `Edit ${editing.name}` : 'New user'} fields={userFields(meta, Boolean(editing.id), minPassword, teams)}
           initialValues={editing} submitLabel={editing.id ? 'Save' : 'Create'} onSubmit={handleSubmit} onClose={() => setEditing(null)} />
       )}
       {deleting && (

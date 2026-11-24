@@ -302,7 +302,7 @@ Endpoints:
 | PUT | `/comments/{id}` | Edit (author only) |
 | DELETE | `/comments/{id}` | Author, the project's PM, or admin |
 
-### 4.10 Allocations — `allocations`
+### 4.10 Allocations — `allocations` *(removed after review; see Phase 2 status)*
 
 | Field | Type / rule |
 |-------|-------------|
@@ -566,6 +566,14 @@ Every phase ends with:
 ✅ **Done when** admin, PM, team member and viewer each log in and see exactly what the matrix allows. API calls outside it return 403.
 
 ### Phase 2 — Teams, capacity & leave (Q3, Q5)
+
+> **Status: implemented, then revised after review.**
+> - **No percentage reservations.** The first cut had per-project allocations ("Dan 50% on ERP"). They were removed (migration 5 drops the table): the requirements only ask how resources are allocated across projects and who is over-allocated, and people do not reserve their week, they own work.
+> - **Allocated hours come from deliverables, reserved up to their deadlines:** a deliverable's remaining estimate (`estimated hours x (100 - progress) / 100`) is spread evenly over the working days from today to its due date on its owner's capacity; the report window counts the share that falls inside it (overdue work is reserved today). Assigning or reassigning a deliverable therefore moves load immediately, even when it is due months away. Open deliverables without an estimate or a due date cannot be placed in time; they are reported as "not counted".
+> - **Project → Team tab:** everyone who owns deliverables in the project (plus "Unassigned"), each expandable to their deliverables there, with open/overdue counts and remaining hours (`GET /projects/{key}/team`).
+> - The per-project breakdown (Q3) is the same deliverable hours grouped by project. Projects the caller cannot see are pooled as "Other projects" so totals stay honest without naming hidden work.
+> - Team leads manage capacity and leave for their team; assigning deliverables stays with project managers and admins.
+> - Thresholds are admin settings: `capacity.working_days`, `capacity.overallocation_threshold_pct` (strictly greater than flags), `capacity.default_window_days`, `leaves.types`.
 
 - Backend: `teams`, `leaves`, `allocations`; `services/capacity.py`; `GET /reports/capacity`.
 - Team lead permissions: capacity edits and leave management for own team.

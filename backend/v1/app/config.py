@@ -166,6 +166,15 @@ SETTINGS: dict[str, Setting] = {
         Setting("capacity.default_weekly_hours", "int", 40, "Weekly capacity given to new users",
                 minimum=0, maximum=168, public=True),
         Setting("budget.currency", "str", "USD", "Currency code used for all amounts", public=True),
+        Setting("capacity.working_days", "int_list", [1, 2, 3, 4, 5],
+                "Working weekdays for capacity maths (1 = Monday ... 7 = Sunday)", minimum=1, maximum=7, public=True),
+        Setting("capacity.overallocation_threshold_pct", "int", 100,
+                "Utilization above this percentage flags a person as over-allocated",
+                minimum=50, maximum=300, public=True),
+        Setting("capacity.default_window_days", "int", 28, "Length of the default capacity report window",
+                minimum=7, maximum=366, public=True),
+        Setting("leaves.types", "str_list", ["vacation", "sick", "training", "other"],
+                "Kinds of planned leave people can record", public=True),
     )
 }
 

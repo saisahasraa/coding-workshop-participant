@@ -111,3 +111,14 @@ def make_project(call, org):
         return data
 
     return _make
+
+
+@pytest.fixture
+def team(call, org):
+    """A team "Platform" led by the team lead, with the lead and the team member as members."""
+    status, body = call("POST", "/teams", {"department_id": org["department_id"], "name": "Platform",
+                                            "lead_id": org["team_lead"]["id"]}, org["admin"]["token"])
+    assert status == 201, body
+    for role in ("team_lead", "team_member"):
+        assert call("PUT", f"/users/{org[role]['id']}", {"team_id": body["id"]}, org["admin"]["token"])[0] == 200
+    return body

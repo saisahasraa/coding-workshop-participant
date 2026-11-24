@@ -185,6 +185,60 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX idx_links_target ON deliverable_links (target_id);
         """,
     ),
+    (
+        4,
+        "teams, leave, allocations",
+        """
+        CREATE TABLE teams (
+            id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            department_id BIGINT NOT NULL REFERENCES departments (id),
+            name          VARCHAR(100) NOT NULL,
+            lead_id       BIGINT REFERENCES users (id) ON DELETE SET NULL,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (department_id, name)
+        );
+        CREATE INDEX idx_teams_lead ON teams (lead_id);
+
+        ALTER TABLE users ADD COLUMN team_id BIGINT REFERENCES teams (id) ON DELETE SET NULL;
+        CREATE INDEX idx_users_team ON users (team_id);
+
+        -- Planned leave (full days, no approval workflow). One person's leaves never overlap.
+        CREATE TABLE leaves (
+            id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            user_id    BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            type       VARCHAR(30) NOT NULL,
+            start_date DATE NOT NULL,
+            end_date   DATE NOT NULL,
+            note       TEXT,
+            created_by BIGINT REFERENCES users (id) ON DELETE SET NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CHECK (end_date >= start_date)
+        );
+        CREATE INDEX idx_leaves_user_dates ON leaves (user_id, start_date, end_date);
+
+        -- A person's share of their weekly capacity committed to a project over a date range.
+        CREATE TABLE allocations (
+            id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            project_id     BIGINT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+            user_id        BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            allocation_pct NUMERIC(5, 2) NOT NULL CHECK (allocation_pct > 0 AND allocation_pct <= 100),
+            start_date     DATE NOT NULL,
+            end_date       DATE,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CHECK (end_date IS NULL OR end_date >= start_date)
+        );
+        CREATE INDEX idx_allocations_project ON allocations (project_id);
+        CREATE INDEX idx_allocations_user ON allocations (user_id, start_date);
+        """,
+    ),
+    (
+        5,
+        "drop percentage allocations: workload is derived from deliverable estimates",
+        "DROP TABLE allocations",
+    ),
 ]
 
 _current_version: int | None = None

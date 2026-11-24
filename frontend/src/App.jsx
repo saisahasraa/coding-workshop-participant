@@ -4,6 +4,9 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ApartmentOutlinedIcon from '@mui/icons-material/ApartmentOutlined';
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
+import EventBusyOutlinedIcon from '@mui/icons-material/EventBusyOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import MonitorHeartOutlinedIcon from '@mui/icons-material/MonitorHeartOutlined';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import { useAuth } from './auth/AuthContext';
@@ -17,6 +20,10 @@ const ProjectsPage = lazy(() => import('./features/projects/ProjectsPage'));
 const ProjectDetailPage = lazy(() => import('./features/projects/ProjectDetailPage'));
 const DeliverablesPage = lazy(() => import('./features/deliverables/DeliverablesPage'));
 const DeliverableDetailPage = lazy(() => import('./features/deliverables/DeliverableDetailPage'));
+const TeamsPage = lazy(() => import('./features/teams/TeamsPage'));
+const TeamDetailPage = lazy(() => import('./features/teams/TeamDetailPage'));
+const LeavePage = lazy(() => import('./features/leave/LeavePage'));
+const CapacityPage = lazy(() => import('./features/capacity/CapacityPage'));
 const MyWorkPage = lazy(() => import('./features/deliverables/MyWorkPage'));
 const UsersPage = lazy(() => import('./features/admin/UsersPage'));
 const DepartmentsPage = lazy(() => import('./features/admin/DepartmentsPage'));
@@ -29,6 +36,9 @@ const NAV = [
   { label: 'Projects', to: '/projects', icon: <AccountTreeOutlinedIcon />, visible: () => true },
   { label: 'Deliverables', to: '/deliverables', icon: <ChecklistOutlinedIcon />, visible: () => true },
   { label: 'My work', to: '/my-work', icon: <AssignmentTurnedInOutlinedIcon />, visible: (can) => can('deliverables', 'update') },
+  { label: 'Teams', to: '/teams', icon: <GroupsOutlinedIcon />, visible: () => true },
+  { label: 'Capacity', to: '/capacity', icon: <InsightsOutlinedIcon />, visible: () => true },
+  { label: 'Leave', to: '/leave', icon: <EventBusyOutlinedIcon />, visible: () => true },
   { label: 'Users', to: '/admin/users', icon: <PeopleAltOutlinedIcon />, visible: (can) => can('users', 'create') },
   { label: 'Departments', to: '/admin/departments', icon: <ApartmentOutlinedIcon />, visible: (can) => can('departments', 'create') },
   { label: 'System status', to: '/status', icon: <MonitorHeartOutlinedIcon />, visible: () => true },
@@ -52,6 +62,10 @@ export default function App() {
         <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="deliverables" element={<DeliverablesPage />} />
         <Route path="deliverables/:id" element={<DeliverableDetailPage />} />
+        <Route path="teams" element={<TeamsPage />} />
+        <Route path="teams/:id" element={<TeamDetailPage />} />
+        <Route path="capacity" element={<CapacityPage />} />
+        <Route path="leave" element={<LeavePage />} />
         <Route path="my-work" element={<MyWorkPage />} />
         <Route path="admin/users" element={<RequireAuth resource="users" action="create"><UsersPage /></RequireAuth>} />
         <Route path="admin/departments" element={<RequireAuth resource="departments" action="create"><DepartmentsPage /></RequireAuth>} />

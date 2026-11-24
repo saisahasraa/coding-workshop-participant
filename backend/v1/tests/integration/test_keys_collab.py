@@ -229,3 +229,19 @@ def test_migration_3_converts_codes_and_numbers_existing_deliverables(monkeypatc
         monkeypatch.undo()
         with psycopg.connect(admin_info, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(scratch)))
+
+
+def test_open_blockers_count_follows_the_blockers_status(call, org, make_project):
+    pm = org["project_manager"]["token"]
+    project = make_project(key="ENG")
+    for _ in range(3):
+        _deliverable(call, project, pm)
+    call("POST", "/deliverables/ENG-3/links", {"type": "is_blocked_by", "target": "ENG-1"}, pm)
+    call("POST", "/deliverables/ENG-3/links", {"type": "is_blocked_by", "target": "ENG-2"}, pm)
+    assert call("GET", "/deliverables/ENG-3", token=pm)[1]["open_blockers"] == 2
+    # Blocking others does not make ENG-1 blocked itself.
+    assert call("GET", "/deliverables/ENG-1", token=pm)[1]["open_blockers"] == 0
+    call("PUT", "/deliverables/ENG-1", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-3", token=pm)[1]["open_blockers"] == 1
+    call("PUT", "/deliverables/ENG-2", {"status": "completed"}, pm)
+    assert call("GET", "/deliverables/ENG-3", token=pm)[1]["open_blockers"] == 0

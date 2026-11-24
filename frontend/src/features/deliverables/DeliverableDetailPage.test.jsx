@@ -74,7 +74,7 @@ describe('Deliverable detail (Jira-style)', () => {
     await userEvent.click(screen.getByRole('combobox', { name: 'Status' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Blocked' }));
     await waitFor(() => expect(puts).toEqual([{ status: 'blocked' }]));
-    expect(await screen.findByText(/Blocked: this deliverable/)).toBeInTheDocument();
+    expect(await screen.findByText(/Marked as blocked, but no linked work item is holding it up/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Mark complete' }));
     await waitFor(() => expect(puts.at(-1)).toEqual({ status: 'completed' }));
@@ -84,6 +84,14 @@ describe('Deliverable detail (Jira-style)', () => {
     await userEvent.type(screen.getByLabelText('Add a comment'), 'Tokens published');
     await userEvent.click(screen.getByRole('button', { name: 'Comment' }));
     expect(await screen.findByText('Tokens published')).toBeInTheDocument();
+  });
+
+  it('explains what is actually blocking, and what is not', async () => {
+    const waiting = { ...DELIVERABLE, status: 'in_progress', open_blockers: 2 };
+    server.use(...sessionHandlers('viewer'), ...support(), http.get(apiUrl('/deliverables/WEB-3'), () => HttpResponse.json(waiting)));
+    renderWithApp(routes(), { route: '/deliverables/WEB-3' });
+    expect(await screen.findByText(/Waiting on 2 unfinished work items that block this one/)).toBeInTheDocument();
+    expect(screen.queryByText(/Marked as blocked/)).not.toBeInTheDocument();
   });
 
   it('shows the server reason when completion is refused', async () => {

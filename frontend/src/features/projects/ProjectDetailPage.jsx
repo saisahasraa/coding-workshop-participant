@@ -27,6 +27,7 @@ import useApi from '../../hooks/useApi';
 import useLookups from '../../hooks/useLookups';
 import { useMeta } from '../../meta/MetaContext';
 import DeliverablesView from '../deliverables/DeliverablesView';
+import TeamTab from './TeamTab';
 import { formatDate, formatMoney, labelize } from '../../utils/format';
 import projectFields from './projectFields';
 
@@ -138,8 +139,10 @@ export default function ProjectDetailPage() {
       <Tabs value={tab} onChange={(_e, value) => setParams(value === 'overview' ? {} : { tab: value }, { replace: true })} sx={{ mb: 2 }}>
         <Tab value="overview" label="Overview" />
         <Tab value="deliverables" label={`Deliverables (${project.deliverables_total})`} />
+        <Tab value="team" label="Team" />
       </Tabs>
       {tab === 'overview' && <Overview project={project} currency={currency} />}
+      {tab === 'team' && <TeamTab project={project} />}
       {tab === 'deliverables' && (
         <DeliverablesView
           baseQuery={deliverableQuery}
