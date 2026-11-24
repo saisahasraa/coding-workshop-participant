@@ -13,7 +13,7 @@ os.environ.setdefault("POSTGRES_USER", os.getenv("TEST_POSTGRES_USER", "postgres
 os.environ.setdefault("POSTGRES_PASS", os.getenv("TEST_POSTGRES_PASS", "postgres123"))
 os.environ["POSTGRES_NAME"] = os.getenv("TEST_POSTGRES_NAME", "acme_test")
 os.environ["SETTINGS_CACHE_SECONDS"] = "0"
-os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production-0123456789")
 
 from app import http  # noqa: E402
 
@@ -42,8 +42,8 @@ def temp_route() -> Iterator[Callable]:
     """Register routes for one test only."""
     before = list(http.router.routes)
 
-    def add(method: str, path: str, handler: Callable, transactional: bool = True) -> None:
-        http.router.add(method, path, handler, transactional)
+    def add(method: str, path: str, handler: Callable, transactional: bool = True, public: bool = True) -> None:
+        http.router.add(method, path, handler, transactional, public)
 
     yield add
     http.router.routes[:] = before

@@ -2,12 +2,12 @@
 
 import base64
 
-import pytest
-
 import psycopg
+import pytest
+from psycopg import errors as pg_errors
+
 from app import http
 from app.http import ApiError, BadRequest, Router, dispatch, normalize_path, parse_body
-from psycopg import errors as pg_errors
 from tests.conftest import body_of, make_event
 
 

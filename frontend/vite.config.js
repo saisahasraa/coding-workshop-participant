@@ -7,6 +7,21 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: app deploys do not invalidate the browser cache for them.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@mui/x-data-grid')) return 'vendor-datagrid';
+          if (id.includes('@mui/x-charts')) return 'vendor-charts';
+          if (id.includes('@mui') || id.includes('@emotion')) return 'vendor-mui';
+          if (/[\\/](react|react-dom|react-router|scheduler)[\\/]/.test(id)) return 'vendor-react';
+          return 'vendor';
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],

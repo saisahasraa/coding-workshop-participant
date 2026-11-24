@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
  * Run an async loader on mount and on `reload()`, cancelling in-flight calls on unmount.
  *
  * @param {(signal: AbortSignal) => Promise<*>} loader Must be stable (module-level or memoized).
- * @returns {{data: *, error: ?Error, loading: boolean, reload: () => void}}
+ * @returns {{data: *, error: ?Error, loading: boolean, reload: () => void, setData: (data: *) => void}}
  */
 export default function useApi(loader) {
   const [state, setState] = useState({ data: null, error: null, loading: true });
@@ -28,5 +28,7 @@ export default function useApi(loader) {
     setVersion((v) => v + 1);
   }, []);
 
-  return { ...state, reload };
+  const setData = useCallback((data) => setState((prev) => ({ ...prev, data })), []);
+
+  return { ...state, reload, setData };
 }

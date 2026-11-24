@@ -16,9 +16,10 @@ from contextlib import contextmanager
 from typing import Any
 
 import psycopg
+from psycopg.rows import dict_row
+
 from app import log
 from app.config import ENV
-from psycopg.rows import dict_row
 
 logger = logging.getLogger(__name__)
 

@@ -33,6 +33,7 @@ class Field:  # pylint: disable=too-many-instance-attributes
     maximum: Decimal | None = None
     exclusive_min: bool = False
     choices: tuple = ()
+    ref: str | None = None  # referenced table for kind == "ref" (existence is checked before writes)
 
     def __post_init__(self) -> None:
         if self.kind not in KINDS:

@@ -155,6 +155,17 @@ SETTINGS: dict[str, Setting] = {
                 minimum=1, maximum=500, public=True),
         Setting("api.max_page_size", "int", 200, "Maximum number of items a client may request per page",
                 minimum=1, maximum=1000, public=True),
+        Setting("auth.access_token_minutes", "int", 15, "Lifetime of access tokens", minimum=1, maximum=1440),
+        Setting("auth.refresh_token_days", "int", 7, "Lifetime of refresh tokens (how long a session lasts)",
+                minimum=1, maximum=90),
+        Setting("auth.password_min_length", "int", 8, "Minimum password length for new passwords",
+                minimum=8, maximum=128, public=True),
+        Setting("projects.default_visibility", "choice", "everyone",
+                "Who can see projects whose visibility is 'inherit': everyone, or only project members",
+                choices=("everyone", "members"), public=True),
+        Setting("capacity.default_weekly_hours", "int", 40, "Weekly capacity given to new users",
+                minimum=0, maximum=168, public=True),
+        Setting("budget.currency", "str", "USD", "Currency code used for all amounts", public=True),
     )
 }
 

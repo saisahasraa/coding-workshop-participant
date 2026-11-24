@@ -24,9 +24,10 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
+from psycopg import errors as pg_errors
+
 from app import db, log, migrations
 from app.config import get_setting
-from psycopg import errors as pg_errors
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,11 @@ class Request:
     user: Any = None  # set by authentication (Phase 1)
 
 
+def to_json(value: Any) -> str:
+    """Serialize ``value`` to JSON, encoding dates as ISO strings and decimals as numbers."""
+    return json.dumps(value, default=_json_default)
+
+
 def _json_default(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -163,12 +169,16 @@ Handler = Callable[[Request], dict]
 
 @dataclass(frozen=True)
 class Route:
-    """A registered route. ``transactional`` routes run inside one DB transaction."""
+    """A registered route.
+
+    ``transactional`` routes run inside one DB transaction; ``public`` routes skip authentication.
+    """
 
     method: str
     pattern: re.Pattern
     handler: Handler
     transactional: bool = True
+    public: bool = False
 
 
 class Router:
@@ -177,15 +187,19 @@ class Router:
     def __init__(self) -> None:
         self.routes: list[Route] = []
 
-    def add(self, method: str, path: str, handler: Handler, transactional: bool = True) -> None:
+    def add(self, method: str, path: str, handler: Handler, transactional: bool = True,
+            public: bool = False) -> None:
         """Register ``handler``; ``{name}`` path segments become ``request.params[name]``."""
+        if not transactional and not public:
+            raise ValueError("authenticated routes must be transactional (the user is loaded from the DB)")
         regex = re.sub(r"\{(\w+)\}", r"(?P<\1>[^/]+)", path)
-        self.routes.append(Route(method.upper(), re.compile(f"^{regex}$"), handler, transactional))
+        self.routes.append(Route(method.upper(), re.compile(f"^{regex}$"), handler, transactional, public))
 
-    def route(self, method: str, path: str, transactional: bool = True) -> Callable[[Handler], Handler]:
+    def route(self, method: str, path: str, transactional: bool = True,
+              public: bool = False) -> Callable[[Handler], Handler]:
         """Decorator form of ``add``."""
         def decorator(handler: Handler) -> Handler:
-            self.add(method, path, handler, transactional)
+            self.add(method, path, handler, transactional, public)
             return handler
         return decorator
 
@@ -222,6 +236,16 @@ class Router:
 
 
 router = Router()
+
+# Set by the auth module: returns the current user or raises Unauthorized.
+Authenticator = Callable[[Request], Any]
+_authenticator: Authenticator | None = None
+
+
+def set_authenticator(authenticator: Authenticator) -> None:
+    """Install the function that resolves ``request.user`` for non-public routes."""
+    global _authenticator  # pylint: disable=global-statement
+    _authenticator = authenticator
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +340,10 @@ def _run(request: Request) -> dict:
     migrations.ensure_migrated()
     _apply_runtime_log_level()
     with db.transaction(get_setting("db.statement_timeout_ms")):
+        if not route.public:
+            if _authenticator is None:
+                raise ApiError(500, "internal_error", "Authentication is not configured")
+            request.user = _authenticator(request)
         return route.handler(request)
 
 

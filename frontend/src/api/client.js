@@ -8,6 +8,20 @@
  */
 
 import { API_BASE_URL, REQUEST_TIMEOUT_MS } from '../config';
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '../auth/tokenStore';
+
+const AUTH_PATHS = new Set(['/auth/login', '/auth/refresh']);
+const REFRESHABLE_CODES = new Set(['token_expired', 'invalid_token', 'unauthorized']);
+
+let onSessionEnded = () => {};
+
+/**
+ * Register a callback run when the session cannot be refreshed (user must sign in again).
+ * @param {() => void} callback
+ */
+export function setSessionEndedHandler(callback) {
+  onSessionEnded = callback;
+}
 
 /** Error thrown for any unsuccessful API call. */
 export class ApiError extends Error {
@@ -65,8 +79,28 @@ async function parseJson(response) {
   }
 }
 
+let refreshInFlight = null;
+
+/**
+ * Exchange the stored refresh token for a new pair. Concurrent callers share one request.
+ * @returns {Promise<boolean>} whether the session was refreshed
+ */
+export function refreshSession() {
+  if (!refreshInFlight) {
+    const refreshToken = getRefreshToken();
+    refreshInFlight = (refreshToken
+      ? send('/auth/refresh', { method: 'POST', body: { refresh_token: refreshToken } })
+        .then((tokens) => { setTokens(tokens); return true; })
+        .catch(() => { clearTokens(); return false; })
+      : Promise.resolve(false)
+    ).finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
 /**
  * Perform an API request and return the parsed JSON body (`null` for 204).
+ * Adds the bearer token, and on an expired session refreshes once and retries.
  * @param {string} path Path relative to the API base
  * @param {object} [options]
  * @param {string} [options.method='GET']
@@ -77,7 +111,20 @@ async function parseJson(response) {
  * @returns {Promise<*>}
  * @throws {ApiError}
  */
-export async function apiRequest(path, {
+export async function apiRequest(path, options = {}) {
+  try {
+    return await send(path, options);
+  } catch (error) {
+    const retryable = error instanceof ApiError && error.status === 401
+      && REFRESHABLE_CODES.has(error.code) && !AUTH_PATHS.has(path) && getRefreshToken();
+    if (!retryable) throw error;
+    if (await refreshSession()) return send(path, options);
+    onSessionEnded();
+    throw error;
+  }
+}
+
+async function send(path, {
   method = 'GET', query, body, signal, timeoutMs = REQUEST_TIMEOUT_MS,
 } = {}) {
   const controller = new AbortController();
@@ -90,7 +137,11 @@ export async function apiRequest(path, {
   try {
     response = await fetch(buildUrl(path, query), {
       method,
-      headers: { Accept: 'application/json', ...(body !== undefined && { 'Content-Type': 'application/json' }) },
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined && { 'Content-Type': 'application/json' }),
+        ...(getAccessToken() && !AUTH_PATHS.has(path) && { Authorization: `Bearer ${getAccessToken()}` }),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });

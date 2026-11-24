@@ -538,6 +538,14 @@ Every phase ends with:
 
 ### Phase 1 — MVP: sign-in, projects, deliverables (Q1, Q4)
 
+> **Status: implemented.**
+> - Each record in a response carries a `permissions` object (`update`, `delete`, `editable_fields`), so the UI hides exactly what the API would refuse.
+> - **Keys (added after review):** projects have a 3-6 character key (`ENG`, `SRE`) that is fixed after creation; deliverables are `<KEY>-<n>` (`ENG-12`), numbered per project from a counter that is never reused. URLs and search accept keys.
+> - **Deliverable page is Jira-style:** content on the left (title, description, acceptance criteria, linked work items, comments), metadata on the right (status, assignee, reporter, priority, due date, estimate, progress), edited in place by whoever has permission.
+> - **Pulled forward from Phase 3** because that page needs them: comments, and links between deliverables (blocks / is blocked by / relates to; circular blocks rejected; a deliverable cannot be completed while an unfinished one blocks it). Phase 3 keeps the project-level dependency graph view.
+> - Deliverable due dates must fall within the project's dates (and project dates cannot exclude existing deliverables).
+> - No separate last-admin guard: admins can't demote, deactivate or delete themselves, and every request comes from an active admin, so at least one active admin always remains.
+
 - Backend:
   - Migrations for `departments`, `users`, `projects`, `deliverables`, `audit_log`.
   - Generic CRUD engine with search, filters, sort and paging.

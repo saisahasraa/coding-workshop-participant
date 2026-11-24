@@ -11,6 +11,8 @@ ignore = [
 
 [lint.isort]
 known-first-party = ["app", "tests", "function"]
+# Vendored copies of these live in this folder (LocalStack hot-reload); they are still third-party.
+known-third-party = ["psycopg", "psycopg_binary", "jwt"]
 
 [lint.per-file-ignores]
-"tests/**" = ["S105", "S106"]  # test fixtures use literal passwords
+"tests/**" = ["S105", "S106", "S107"]  # test fixtures use literal passwords
